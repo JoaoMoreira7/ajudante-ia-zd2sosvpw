@@ -1,0 +1,906 @@
+{
+  "generatedAt": "2026-09-18T19:20:51.210Z",
+  "collections": [
+    {
+      "name": "users",
+      "type": "auth",
+      "apiRules": {
+        "list": "id = @request.auth.id",
+        "view": "id = @request.auth.id",
+        "create": "",
+        "update": "id = @request.auth.id",
+        "delete": "id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "avatar",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX `idx_tokenKey__pb_users_auth_` ON `users` (`tokenKey`)",
+        "CREATE UNIQUE INDEX `idx_email__pb_users_auth_` ON `users` (`email`) WHERE `email` != ''"
+      ]
+    },
+    {
+      "name": "clientes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "view": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.owner_id = @request.auth.id",
+        "update": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && owner_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "telefone",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "whatsapp",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "endereco",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_clientes_owner ON clientes (owner_id)",
+        "CREATE INDEX idx_clientes_nome ON clientes (nome)"
+      ]
+    },
+    {
+      "name": "obras",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "view": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.owner_id = @request.auth.id",
+        "update": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && owner_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "cliente_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "clientes"
+        },
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "endereco",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_inicio",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "previsao_termino",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_contratado",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_recebido",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor_pendente",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "em_andamento",
+            "orcada",
+            "concluida",
+            "parada"
+          ]
+        },
+        {
+          "name": "etapas",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_obras_owner ON obras (owner_id)",
+        "CREATE INDEX idx_obras_cliente ON obras (cliente_id)",
+        "CREATE INDEX idx_obras_status ON obras (status)"
+      ]
+    },
+    {
+      "name": "orcamentos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "view": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.owner_id = @request.auth.id",
+        "update": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && owner_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "cliente_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "clientes"
+        },
+        {
+          "name": "obra_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "obras"
+        },
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "itens",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "subtotal",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "desconto",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "total",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "criado",
+            "enviado",
+            "aguardando_resposta",
+            "aprovado",
+            "recusado",
+            "em_execucao",
+            "concluido"
+          ]
+        },
+        {
+          "name": "sinal",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parcelas",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_orcamentos_owner ON orcamentos (owner_id)",
+        "CREATE INDEX idx_orcamentos_cliente ON orcamentos (cliente_id)",
+        "CREATE INDEX idx_orcamentos_status ON orcamentos (status)"
+      ]
+    },
+    {
+      "name": "financeiro",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "view": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.owner_id = @request.auth.id",
+        "update": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && owner_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "obra_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "obras"
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "entrada",
+            "saida"
+          ]
+        },
+        {
+          "name": "categoria",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "pagamento",
+            "sinal",
+            "parcela",
+            "recebimento",
+            "cimento",
+            "areia",
+            "bloco",
+            "combustivel",
+            "ferramenta",
+            "alimentacao",
+            "ajudante",
+            "transporte",
+            "outros"
+          ]
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "valor",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "pendente",
+            "pago",
+            "vencido"
+          ]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_fin_owner ON financeiro (owner_id)",
+        "CREATE INDEX idx_fin_tipo ON financeiro (tipo)",
+        "CREATE INDEX idx_fin_data ON financeiro (data)"
+      ]
+    },
+    {
+      "name": "materiais_estoque",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "view": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.owner_id = @request.auth.id",
+        "update": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && owner_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "quantidade",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "unidade",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "saco",
+            "un",
+            "kg",
+            "L",
+            "m2"
+          ]
+        },
+        {
+          "name": "preco",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "fornecedor",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "estoque_minimo",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_materiais_owner ON materiais_estoque (owner_id)",
+        "CREATE INDEX idx_materiais_nome ON materiais_estoque (nome)"
+      ]
+    },
+    {
+      "name": "diario_obra",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "view": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.owner_id = @request.auth.id",
+        "update": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && owner_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "obra_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "obras"
+        },
+        {
+          "name": "data",
+          "type": "date",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "servico",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "quantidade",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "material",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_diario_owner ON diario_obra (owner_id)",
+        "CREATE INDEX idx_diario_obra ON diario_obra (obra_id)"
+      ]
+    },
+    {
+      "name": "documentos",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "view": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.owner_id = @request.auth.id",
+        "update": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && owner_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "obra_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "obras"
+        },
+        {
+          "name": "cliente_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "clientes"
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "orcamento",
+            "recibo",
+            "ordem_servico",
+            "relatorio",
+            "lista_materiais",
+            "resumo_financeiro",
+            "foto",
+            "outro"
+          ]
+        },
+        {
+          "name": "arquivo",
+          "type": "file",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_documentos_owner ON documentos (owner_id)"
+      ]
+    },
+    {
+      "name": "sync_queue",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "view": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.owner_id = @request.auth.id",
+        "update": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && owner_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "entidade",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "entidade_id",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "operacao",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "create",
+            "update",
+            "delete"
+          ]
+        },
+        {
+          "name": "payload",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "pendente",
+            "processado",
+            "erro"
+          ]
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_sync_owner ON sync_queue (owner_id)",
+        "CREATE INDEX idx_sync_status ON sync_queue (status)"
+      ]
+    },
+    {
+      "name": "configuracoes",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "view": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "create": "@request.auth.id != '' && @request.body.owner_id = @request.auth.id",
+        "update": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && owner_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "modo",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "simples",
+            "profissional",
+            "economico"
+          ]
+        },
+        {
+          "name": "fonte_tamanho",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "p",
+            "m",
+            "g"
+          ]
+        },
+        {
+          "name": "alto_contraste",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "voz_respostas",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tema",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "claro",
+            "escuro"
+          ]
+        },
+        {
+          "name": "nome_profissional",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "nome_empresa",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "telefone",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate"
+          ]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": [
+            "onCreate",
+            "onUpdate"
+          ]
+        }
+      ],
+      "indexes": [
+        "CREATE UNIQUE INDEX idx_config_owner ON configuracoes (owner_id)"
+      ]
+    }
+  ]
+}
