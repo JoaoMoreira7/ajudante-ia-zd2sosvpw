@@ -1,0 +1,16 @@
+{
+  "name": "Ajudante IA - Construção Civil",
+  "short_name": "Ajudante IA",
+  "description": "Assistente digital por voz e motor de cálculos para profissionais da construção civil brasileira.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF8F5",
+  "theme_color": "#C97B2D",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

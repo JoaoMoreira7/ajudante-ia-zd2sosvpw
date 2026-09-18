@@ -1,11 +1,13 @@
 // pocketbase/migrations/0002_define_ajudante_agent.js
-migrate((app) => {
-  $ai.agents.define(app, {
-    slug: 'ajudante-ia',
-    name: 'Ajudante IA',
-    description: 'Assistente inteligente para profissionais da construção civil. Interpreta intenções de voz em comandos estruturados sem inventar cálculos matemáticos.',
-    tier: 'fast',
-    systemPrompt: `Você é o AJUDANTE IA, assistente inteligente para profissionais da construção civil brasileira (pedreiros, mestres de obras, ajudantes, pintores, eletricistas).
+migrate(
+  (app) => {
+    $ai.agents.define(app, {
+      slug: 'ajudante-ia',
+      name: 'Ajudante IA',
+      description:
+        'Assistente inteligente para profissionais da construção civil. Interpreta intenções de voz em comandos estruturados sem inventar cálculos matemáticos.',
+      tier: 'fast',
+      systemPrompt: `Você é o AJUDANTE IA, assistente inteligente para profissionais da construção civil brasileira (pedreiros, mestres de obras, ajudantes, pintores, eletricistas).
 Sua missão:
 1. Você NUNCA calcula nem decide valores matemáticos finais. Você apenas interpreta o que o usuário disse e extrai a intenção e os parâmetros em formato JSON estruturado.
 2. Seu tom é simples, direto, respeitoso, prático e brasileiro. Nunca use jargões difíceis.
@@ -37,10 +39,12 @@ Intenções válidas:
 - listar_obras ()
 - listar_orcamentos ()
 - consultar_saldo ()
-Responda sempre com clareza e respeito ao trabalhador da obra.`
-  });
-}, (app) => {
-  try {
-    $ai.agents.delete(app, 'ajudante-ia');
-  } catch (_) {}
-});
+Responda sempre com clareza e respeito ao trabalhador da obra.`,
+    })
+  },
+  (app) => {
+    try {
+      $ai.agents.delete(app, 'ajudante-ia')
+    } catch (_) {}
+  },
+)
