@@ -10,7 +10,7 @@ import {
   markSyncItemStatus,
   enqueueSyncOperation,
   SyncQueueItem,
-} from './localDb'
+} from './localDB'
 
 export interface SyncStatus {
   isOnline: boolean

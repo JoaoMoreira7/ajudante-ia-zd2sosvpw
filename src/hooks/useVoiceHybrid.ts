@@ -9,7 +9,27 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-// Declaração de tipos para SpeechRecognition
+// Declaração de tipos para SpeechRecognition do navegador
+interface SpeechRecognitionInstance {
+  continuous: boolean
+  interimResults: boolean
+  maxAlternatives?: number
+  lang: string
+  start: () => void
+  stop: () => void
+  abort: () => void
+  onresult: (event: any) => void
+  onerror: (event: any) => void
+  onend: () => void
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognitionInstance
+    webkitSpeechRecognition?: new () => SpeechRecognitionInstance
+  }
+}
+
 // Interface de compatibilidade com navegadores
 export function useVoiceHybrid() {
   const [isSupported, setIsSupported] = useState(false)

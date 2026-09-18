@@ -19,6 +19,8 @@ import {
   SyncQueueItem,
 } from '@/types/database'
 
+export type { SyncQueueItem } from '@/types/database'
+
 const DB_NAME = 'ajudante_ia_local_v1'
 const DB_VERSION = 2
 
@@ -606,3 +608,60 @@ class LocalDatabase {
 }
 
 export const localDB = new LocalDatabase()
+
+// Helpers de compatibilidade para syncService e módulos dependentes
+export async function localGetAll<T>(storeName: string): Promise<T[]> {
+  return localDB.getAll(storeName as StoreName) as unknown as Promise<T[]>
+}
+
+export async function localPut<T extends { id?: string }>(
+  storeName: string,
+  item: T,
+  _isRemoteSync = false,
+): Promise<T> {
+  return localDB.put(storeName as StoreName, item as any) as unknown as Promise<T>
+}
+
+export async function localDelete(
+  storeName: string,
+  id: string,
+  _isRemoteSync = false,
+): Promise<boolean> {
+  return localDB.delete(storeName as StoreName, id)
+}
+
+export async function getPendingSyncQueue(): Promise<SyncQueueItem[]> {
+  const queue = await localDB.getAll('sync_queue')
+  return queue.filter((item) => item.status === 'pendente')
+}
+
+export async function markSyncItemStatus(
+  id: string,
+  status: 'pendente' | 'processado' | 'erro',
+  _errorMessage?: string,
+): Promise<void> {
+  const item = await localDB.getById('sync_queue', id)
+  if (item) {
+    item.status = status
+    await localDB.put('sync_queue', item)
+  }
+}
+
+export async function enqueueSyncOperation(
+  entidade: string,
+  entidade_id: string,
+  operacao: 'create' | 'update' | 'delete',
+  payload: Record<string, unknown>,
+): Promise<void> {
+  const syncItem: SyncQueueItem = {
+    id: `sync_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    owner_id: (payload.owner_id as string) || 'local_user',
+    entidade: entidade as SyncQueueItem['entidade'],
+    entidade_id,
+    operacao,
+    payload,
+    status: 'pendente',
+    created: new Date().toISOString(),
+  }
+  await localDB.put('sync_queue', syncItem)
+}

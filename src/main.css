@@ -44,6 +44,20 @@
     --ring: 36 100% 65%;
   }
 
+  /* Ocultar selo / badge de atribuição Skip ("Criado com Skip" / "Made with Skip") caso injetado externamente */
+  #skip-badge,
+  .skip-badge,
+  [data-skip-badge],
+  [id*='skip-badge'],
+  [class*='skip-badge'],
+  a[href*='goskip.dev']:not(.allow-skip-link),
+  a[href*='skip.it']:not(.allow-skip-link) {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
   /* Alto Contraste */
   html.alto-contraste {
     --background: 0 0% 0% !important;
