@@ -8,11 +8,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useAuth } from '@/contexts/AuthContext'
+import { verificarLimiteOrcamentos } from '@/lib/planLimits'
+import PlanUpgradeModal from '@/components/PlanUpgradeModal'
 
 export const OrcamentoNovo: React.FC = () => {
   const navigate = useNavigate()
+  const { planoAtivo, user, isTrial } = useAuth()
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [obras, setObras] = useState<Obra[]>([])
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
+  const [upgradeMensagem, setUpgradeMensagem] = useState('')
 
   const [titulo, setTitulo] = useState('Orçamento de Construção / Reforma')
   const [clienteId, setClienteId] = useState('')
@@ -99,6 +105,22 @@ export const OrcamentoNovo: React.FC = () => {
   )
 
   const handleSalvar = async () => {
+    const mesAtual = new Date().toISOString().slice(0, 7)
+    const orcs = await localDB.getAll('orcamentos')
+    const orcsMes = orcs.filter((o) => (o.created || '').startsWith(mesAtual)).length
+
+    const validacao = verificarLimiteOrcamentos(
+      planoAtivo,
+      orcsMes,
+      user?.modulos_liberados,
+      isTrial,
+    )
+    if (!validacao.permitido) {
+      setUpgradeMensagem(validacao.mensagemBloqueio || 'Limite de orçamentos mensais atingido.')
+      setUpgradeModalOpen(true)
+      return
+    }
+
     const novoOrc = {
       id: 'orc_' + Date.now(),
       owner_id: 'local_user',
@@ -328,6 +350,14 @@ export const OrcamentoNovo: React.FC = () => {
           </Button>
         </CardContent>
       </Card>
+      {/* Modal de Upgrade Amigável */}
+      <PlanUpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        titulo="Limite Mensal de Orçamentos Atingido"
+        mensagem={upgradeMensagem}
+        planoSugerido="profissional"
+      />
     </div>
   )
 }

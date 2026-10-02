@@ -1,6 +1,17 @@
 import React, { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { Settings, Sparkles, Feather, HardHat, Moon, Volume2, Shield, LogOut } from 'lucide-react'
+import {
+  Settings,
+  Sparkles,
+  Feather,
+  HardHat,
+  Moon,
+  Volume2,
+  Shield,
+  LogOut,
+  CreditCard,
+} from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 
 export const Configuracoes: React.FC = () => {
-  const { config, updateConfig, setModo, setPerfil, perfil, user, logout } = useAuth()
+  const { config, updateConfig, setModo, setPerfil, perfil, user, logout, planoAtivo } = useAuth()
   const [nome, setNome] = useState(config.nome_profissional || '')
   const [empresa, setEmpresa] = useState(config.empresa || '')
   const [salvo, setSalvo] = useState(false)
@@ -35,7 +46,49 @@ export const Configuracoes: React.FC = () => {
             Ajustes visuais, modos de operação do Ajudante IA e dados profissionais.
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <Link to="/planos">
+            <Button
+              size="sm"
+              variant="outline"
+              className="font-bold text-xs gap-1.5 border-primary/40 text-primary"
+            >
+              <CreditCard className="w-3.5 h-3.5" />
+              Plano: {planoAtivo.toUpperCase()}
+            </Button>
+          </Link>
+        </div>
       </div>
+
+      {/* Cartão de Assinatura e Planos */}
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-primary block">
+              Assinatura Ativa
+            </span>
+            <h3 className="text-base font-black text-foreground mt-0.5">
+              {planoAtivo === 'essencial' && 'Plano Essencial — R$ 29,90/mês'}
+              {planoAtivo === 'profissional' && 'Plano Profissional — R$ 49,90/mês'}
+              {planoAtivo === 'empresa' && 'Plano Empresa — R$ 79,90/mês'}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              {planoAtivo === 'essencial' &&
+                'Até 5 clientes, 2 obras simultâneas, 10 orçamentos/mês e cálculos completos de construção.'}
+              {planoAtivo === 'profissional' &&
+                'Clientes, obras e orçamentos ilimitados, emissão de PDF timbrado e diário por voz.'}
+              {planoAtivo === 'empresa' &&
+                'Gestão corporativa, até 5 usuários de equipe, relatórios consolidados e suporte prioritário.'}
+            </p>
+          </div>
+          <Link to="/planos" className="shrink-0">
+            <Button className="font-bold text-xs gap-1.5 w-full sm:w-auto">
+              <Sparkles className="w-4 h-4" />
+              Ver Planos e Upgrades
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
 
       {/* 0. Perfil de Acesso do Usuário (Dono / Operador) */}
       <Card>

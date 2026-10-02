@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { localDB } from '@/lib/localDB'
 import { Obra, Cliente } from '@/types/database'
-import { HardHat, Plus, MapPin, Calendar, CheckCircle2, TrendingUp } from 'lucide-react'
+import { HardHat, Plus, MapPin, Calendar, CheckCircle2, TrendingUp, Sparkles } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { verificarLimiteObras } from '@/lib/planLimits'
+import PlanUpgradeModal from '@/components/PlanUpgradeModal'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -18,10 +20,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 export const Obras: React.FC = () => {
-  const { isDono, isOperador } = useAuth()
+  const { isDono, isOperador, planoAtivo, user, isTrial } = useAuth()
   const [obras, setObras] = useState<Obra[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [dialogAberto, setDialogAberto] = useState(false)
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
+  const [upgradeMensagem, setUpgradeMensagem] = useState('')
 
   // Formulário Nova Obra
   const [titulo, setTitulo] = useState('')
@@ -40,9 +44,44 @@ export const Obras: React.FC = () => {
     carregarObras()
   }, [])
 
+  const obrasEmAndamento = obras.filter((o) => o.status === 'em_andamento')
+
+  const handleTentativaNovaObra = () => {
+    const validacao = verificarLimiteObras(
+      planoAtivo,
+      obrasEmAndamento.length,
+      user?.modulos_liberados,
+      isTrial,
+    )
+
+    if (!validacao.permitido) {
+      setUpgradeMensagem(
+        validacao.mensagemBloqueio ||
+          'Você atingiu o limite de obras simultâneas do seu plano atual. Faça o upgrade para o Plano Profissional para gerenciar obras ilimitadas.',
+      )
+      setUpgradeModalOpen(true)
+      return
+    }
+
+    setDialogAberto(true)
+  }
+
   const handleSalvarObra = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!titulo.trim()) return
+
+    const validacao = verificarLimiteObras(
+      planoAtivo,
+      obrasEmAndamento.length,
+      user?.modulos_liberados,
+      isTrial,
+    )
+    if (!validacao.permitido) {
+      setDialogAberto(false)
+      setUpgradeMensagem(validacao.mensagemBloqueio || 'Limite de obras atingido.')
+      setUpgradeModalOpen(true)
+      return
+    }
 
     const contratado = parseFloat(valorContratado) || 0
     const recebido = parseFloat(valorRecebido) || 0
@@ -95,12 +134,10 @@ export const Obras: React.FC = () => {
         </div>
 
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-          <DialogTrigger asChild>
-            <Button className="font-bold gap-2">
-              <Plus className="w-4 h-4" />
-              Nova Obra
-            </Button>
-          </DialogTrigger>
+          <Button onClick={handleTentativaNovaObra} className="font-bold gap-2">
+            <Plus className="w-4 h-4" />
+            Nova Obra
+          </Button>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="text-lg font-bold">Cadastrar Nova Obra</DialogTitle>
@@ -165,6 +202,34 @@ export const Obras: React.FC = () => {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Aviso de limite do plano se aplicável */}
+      {planoAtivo === 'essencial' && !isTrial && (
+        <div className="p-3.5 rounded-xl bg-muted/40 border border-border flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary shrink-0" />
+            <span>
+              <strong>Plano Essencial:</strong> {obrasEmAndamento.length} de 2 obras ativas em
+              andamento.
+            </span>
+          </div>
+          {obrasEmAndamento.length >= 2 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setUpgradeMensagem(
+                  'Você atingiu o limite de 2 obras simultâneas do Plano Essencial. Faça o upgrade para o Plano Profissional (R$ 49,90/mês) para ter obras ilimitadas.',
+                )
+                setUpgradeModalOpen(true)
+              }}
+              className="h-7 text-xs font-bold"
+            >
+              Liberar Obras Ilimitadas
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* Indicadores Resumo das Obras */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -276,6 +341,14 @@ export const Obras: React.FC = () => {
           )
         })}
       </div>
+      {/* Modal de Upgrade Amigável */}
+      <PlanUpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        titulo="Limite de Obras Simultâneas Atingido"
+        mensagem={upgradeMensagem}
+        planoSugerido="profissional"
+      />
     </div>
   )
 }

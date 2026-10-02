@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { localDB } from '@/lib/localDB'
 import { Cliente } from '@/types/database'
-import { Users, Plus, Phone, MessageSquare, MapPin, Search } from 'lucide-react'
+import { Users, Plus, Phone, MessageSquare, MapPin, Search, Sparkles } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+import { verificarLimiteClientes } from '@/lib/planLimits'
+import PlanUpgradeModal from '@/components/PlanUpgradeModal'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,9 +19,12 @@ import {
 } from '@/components/ui/dialog'
 
 export const Clientes: React.FC = () => {
+  const { planoAtivo, user, isTrial } = useAuth()
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [busca, setBusca] = useState('')
   const [dialogAberto, setDialogAberto] = useState(false)
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
+  const [upgradeMensagem, setUpgradeMensagem] = useState('')
 
   // Formulário de Novo Cliente
   const [nome, setNome] = useState('')
@@ -36,9 +42,42 @@ export const Clientes: React.FC = () => {
     carregarClientes()
   }, [])
 
+  const handleTentativaNovoCliente = () => {
+    const validacao = verificarLimiteClientes(
+      planoAtivo,
+      clientes.length,
+      user?.modulos_liberados,
+      isTrial,
+    )
+
+    if (!validacao.permitido) {
+      setUpgradeMensagem(
+        validacao.mensagemBloqueio ||
+          'Você atingiu o limite de clientes do seu plano atual. Faça o upgrade para o Plano Profissional para ter clientes ilimitados.',
+      )
+      setUpgradeModalOpen(true)
+      return
+    }
+
+    setDialogAberto(true)
+  }
+
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!nome.trim()) return
+
+    const validacao = verificarLimiteClientes(
+      planoAtivo,
+      clientes.length,
+      user?.modulos_liberados,
+      isTrial,
+    )
+    if (!validacao.permitido) {
+      setDialogAberto(false)
+      setUpgradeMensagem(validacao.mensagemBloqueio || 'Limite de clientes atingido.')
+      setUpgradeModalOpen(true)
+      return
+    }
 
     const novo: Cliente = {
       id: 'cli_' + Date.now(),
@@ -83,12 +122,10 @@ export const Clientes: React.FC = () => {
         </div>
 
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-          <DialogTrigger asChild>
-            <Button className="font-bold gap-2">
-              <Plus className="w-4 h-4" />
-              Novo Cliente
-            </Button>
-          </DialogTrigger>
+          <Button onClick={handleTentativaNovoCliente} className="font-bold gap-2">
+            <Plus className="w-4 h-4" />
+            Novo Cliente
+          </Button>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="text-lg font-bold">Cadastrar Novo Cliente</DialogTitle>
@@ -156,6 +193,33 @@ export const Clientes: React.FC = () => {
         />
       </div>
 
+      {/* Aviso de limite do plano se aplicável */}
+      {planoAtivo === 'essencial' && !isTrial && (
+        <div className="p-3.5 rounded-xl bg-muted/40 border border-border flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary shrink-0" />
+            <span>
+              <strong>Plano Essencial:</strong> {clientes.length} de 5 clientes cadastrados.
+            </span>
+          </div>
+          {clientes.length >= 5 && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setUpgradeMensagem(
+                  'Você atingiu o limite de 5 clientes do Plano Essencial. Faça o upgrade para o Plano Profissional (R$ 49,90/mês) para ter clientes ilimitados.',
+                )
+                setUpgradeModalOpen(true)
+              }}
+              className="h-7 text-xs font-bold"
+            >
+              Liberar Ilimitados
+            </Button>
+          )}
+        </div>
+      )}
+
       {/* Grade de Clientes */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtrados.map((cliente) => (
@@ -192,6 +256,14 @@ export const Clientes: React.FC = () => {
           </Link>
         ))}
       </div>
+      {/* Modal de Upgrade Amigável */}
+      <PlanUpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        titulo="Limite de Clientes Atingido"
+        mensagem={upgradeMensagem}
+        planoSugerido="profissional"
+      />
     </div>
   )
 }

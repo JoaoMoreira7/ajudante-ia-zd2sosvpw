@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-02T22:28:04.995Z",
+  "generatedAt": "2026-10-02T22:38:39.456Z",
   "collections": [
     {
       "name": "users",
@@ -963,7 +963,7 @@
           "type": "select",
           "required": true,
           "system": false,
-          "selectValues": ["gratuito", "profissional", "empresa"]
+          "selectValues": ["essencial", "profissional", "empresa"]
         },
         {
           "name": "ciclo",

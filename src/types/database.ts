@@ -10,7 +10,7 @@ export type StatusConta =
   | 'bloqueado_inadimplencia'
   | 'cancelado'
 
-export type PlanoTipo = 'gratuito' | 'profissional' | 'empresa'
+export type PlanoTipo = 'essencial' | 'profissional' | 'empresa'
 export type CicloTipo = 'mensal' | 'trimestral' | 'semestral' | 'anual'
 export type OrigemVenda = 'direta' | 'internet'
 export type FormaPagamentoVenda =
@@ -304,12 +304,30 @@ export interface NotificacaoSistema {
   updated?: string
 }
 
+export interface LimitesPlano {
+  maxClientes: number // -1 = ilimitado
+  maxObrasSimultaneas: number // -1 = ilimitado
+  maxOrcamentosMes: number // -1 = ilimitado
+  permitePdfDocumentos: boolean // recibos, OS, orçamentos timbrados
+  permiteDiarioVoz: boolean
+  permiteFotosObra: boolean
+  permiteEstoqueCompras: boolean
+  permiteRelatorioWhatsApp: boolean
+  permiteAlertasPrazos: boolean
+  maxUsuariosEquipe: number // 1 no essencial/profissional, até 5 no empresa
+  relatoriosAvancados: boolean
+  suportePrioritario: boolean
+  modulosSobMedida: boolean
+}
+
 export interface CatalogoPlano {
   id: PlanoTipo
   nome: string
+  badge?: string
   descricao: string
   precoMensal: number
   precoAnual: number
+  limites: LimitesPlano
   recursos: string[]
   destaque?: boolean
 }

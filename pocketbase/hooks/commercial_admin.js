@@ -243,7 +243,7 @@ routerAdd('POST', '/backend/v1/admin/commercial/register-direct-sale', (e) => {
     })
   }
 
-  const plano = body.plano || 'profissional'
+  const plano = body.plano || 'essencial'
   const ciclo = body.ciclo || 'mensal'
   const valorNegociado = parseFloat(body.valor) || 0
   const formaPagamento = body.formaPagamento || 'pix'

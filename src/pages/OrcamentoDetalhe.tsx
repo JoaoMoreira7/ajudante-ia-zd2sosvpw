@@ -19,12 +19,16 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/contexts/AuthContext'
 import { gerarEImprimirRecibo, gerarEImprimirOrdemServico } from '@/lib/documentGenerator'
+import { verificarPermissaoDocumentosPdf } from '@/lib/planLimits'
+import PlanUpgradeModal from '@/components/PlanUpgradeModal'
 
 export const OrcamentoDetalhe: React.FC = () => {
-  const { isOperador } = useAuth()
+  const { isOperador, planoAtivo, user, isTrial } = useAuth()
   const { id } = useParams<{ id: string }>()
   const [orcamento, setOrcamento] = useState<Orcamento | null>(null)
   const [cliente, setCliente] = useState<Cliente | null>(null)
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
+  const [upgradeMensagem, setUpgradeMensagem] = useState('')
 
   const carregarDados = async () => {
     if (!id) return
@@ -127,6 +131,20 @@ export const OrcamentoDetalhe: React.FC = () => {
                 size="sm"
                 className="gap-1.5 font-bold text-xs h-10 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
                 onClick={() => {
+                  const validacao = verificarPermissaoDocumentosPdf(
+                    planoAtivo,
+                    user?.modulos_liberados,
+                    isTrial,
+                  )
+                  if (!validacao.permitido) {
+                    setUpgradeMensagem(
+                      validacao.mensagemBloqueio ||
+                        'Disponível no Plano Profissional (R$ 49,90/mês).',
+                    )
+                    setUpgradeModalOpen(true)
+                    return
+                  }
+
                   gerarEImprimirRecibo(
                     {
                       profissionalNome: 'Profissional da Construção',
@@ -148,6 +166,20 @@ export const OrcamentoDetalhe: React.FC = () => {
                 size="sm"
                 className="gap-1.5 font-bold text-xs h-10 border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30"
                 onClick={() => {
+                  const validacao = verificarPermissaoDocumentosPdf(
+                    planoAtivo,
+                    user?.modulos_liberados,
+                    isTrial,
+                  )
+                  if (!validacao.permitido) {
+                    setUpgradeMensagem(
+                      validacao.mensagemBloqueio ||
+                        'Disponível no Plano Profissional (R$ 49,90/mês).',
+                    )
+                    setUpgradeModalOpen(true)
+                    return
+                  }
+
                   gerarEImprimirOrdemServico(
                     {
                       profissionalNome: 'Profissional da Construção',
@@ -327,6 +359,14 @@ export const OrcamentoDetalhe: React.FC = () => {
           )}
         </CardContent>
       </Card>
+      {/* Modal de Upgrade Amigável */}
+      <PlanUpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        titulo="Emissão de Proposta e PDF"
+        mensagem={upgradeMensagem}
+        planoSugerido="profissional"
+      />
     </div>
   )
 }

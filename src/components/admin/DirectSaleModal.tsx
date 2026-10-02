@@ -50,7 +50,7 @@ export const DirectSaleModal: React.FC<DirectSaleModalProps> = ({
   const [selectedUserId, setSelectedUserId] = useState<string>('')
   const [novoNome, setNovoNome] = useState('')
   const [novoEmail, setNovoEmail] = useState('')
-  const [plano, setPlano] = useState<PlanoTipo>('profissional')
+  const [plano, setPlano] = useState<PlanoTipo>('essencial')
   const [ciclo, setCiclo] = useState<CicloTipo>('mensal')
 
   const planoInfo = CATALOGO_PLANOS.find((p) => p.id === plano) || CATALOGO_PLANOS[1]
@@ -223,14 +223,14 @@ export const DirectSaleModal: React.FC<DirectSaleModalProps> = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gratuito" className="text-xs">
-                    Gratuito (R$ 0)
+                  <SelectItem value="essencial" className="text-xs">
+                    Plano Essencial (Sugerido: R$ 29,90/mês)
                   </SelectItem>
                   <SelectItem value="profissional" className="text-xs">
-                    Profissional (Sugerido: R$ 149/mês)
+                    Plano Profissional (Sugerido: R$ 49,90/mês)
                   </SelectItem>
                   <SelectItem value="empresa" className="text-xs">
-                    Empresa (Sugerido: R$ 299/mês)
+                    Plano Empresa (Sugerido: R$ 79,90/mês)
                   </SelectItem>
                 </SelectContent>
               </Select>

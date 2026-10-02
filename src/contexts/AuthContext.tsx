@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { localDB } from '@/lib/localDB'
-import { ConfiguracoesApp } from '@/types/database'
+import { Assinatura, ConfiguracoesApp, PlanoTipo } from '@/types/database'
 
 export type AppMode = 'simples' | 'profissional' | 'economico'
 export type FontSize = 'p' | 'm' | 'g'
@@ -42,6 +42,9 @@ interface AuthContextType {
     name: string,
     perfil?: 'admin' | 'dono' | 'operador',
   ) => Promise<{ success: boolean; error?: string }>
+  assinatura: Assinatura | null
+  planoAtivo: PlanoTipo
+  isTrial: boolean
   logout: () => void
   refreshUserData: () => Promise<void>
 }
@@ -76,6 +79,9 @@ const AuthContext = createContext<AuthContextType>({
   toggleAltoContraste: async () => {},
   login: async () => ({ success: false }),
   signup: async () => ({ success: false }),
+  assinatura: null,
+  planoAtivo: 'essencial',
+  isTrial: false,
   logout: () => {},
   refreshUserData: async () => {},
 })
@@ -109,9 +115,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(pb.authStore.token)
   const [isLoading, setIsLoading] = useState(true)
   const [config, setConfig] = useState<ConfiguracoesApp>(defaultConfig)
+  const [assinatura, setAssinatura] = useState<Assinatura | null>(null)
   const [perfilAtivo, setPerfilAtivo] = useState<'admin' | 'dono' | 'operador'>(() => {
     return (localStorage.getItem('ajudante_perfil_ativo') as any) || 'admin'
   })
+
+  const carregarAssinaturaUsuario = async (userId: string) => {
+    if (!userId || userId === 'local_user') return
+    try {
+      if (pb.authStore.isValid && navigator.onLine) {
+        const ass = await pb
+          .collection('assinaturas')
+          .getFirstListItem<Assinatura>(`user_id = "${userId}"`, { requestKey: null })
+        setAssinatura(ass)
+        localStorage.setItem('ajudante_assinatura_cache', JSON.stringify(ass))
+        return
+      }
+    } catch (_) {
+      // Sem assinatura remota ou erro
+    }
+
+    // Fallback de cache local
+    const cached = localStorage.getItem('ajudante_assinatura_cache')
+    if (cached) {
+      try {
+        setAssinatura(JSON.parse(cached))
+      } catch {
+        /* intentionally ignored */
+      }
+    }
+  }
 
   const refreshUserData = async () => {
     if (pb.authStore.record && pb.authStore.isValid && navigator.onLine) {
@@ -132,6 +165,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           modulos_liberados: (fresh as any).modulos_liberados,
         })
         setPerfilAtivo(p)
+        await carregarAssinaturaUsuario(fresh.id)
       } catch (err) {
         console.warn('Erro ao atualizar dados do usuário:', err)
       }
@@ -172,6 +206,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (configs[0].perfil) {
             setPerfilAtivo(configs[0].perfil)
           }
+        }
+        if (pb.authStore.record?.id) {
+          await carregarAssinaturaUsuario(pb.authStore.record.id)
         }
       } catch (err) {
         console.warn('Erro ao inicializar DB local:', err)
@@ -342,6 +379,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     (statusConta === 'bloqueado_manual' || statusConta === 'bloqueado_inadimplencia')
   const motivoBloqueio = user?.motivo_bloqueio || null
 
+  // Se admin, tem plano Empresa irrestrito; caso contrário, lê da assinatura ou fallback Essencial
+  const planoAtivo: PlanoTipo =
+    efetivoPerfil === 'admin' ? 'empresa' : (assinatura?.plano as PlanoTipo) || 'essencial'
+  const isTrial = statusConta === 'trial' || assinatura?.status === 'trial'
+
   return (
     <AuthContext.Provider
       value={{
@@ -353,6 +395,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isOperador: efetivoPerfil === 'operador',
         isBloqueado,
         motivoBloqueio,
+        assinatura,
+        planoAtivo,
+        isTrial,
         isAuthenticated: Boolean(user || token),
         isLoading,
         config,

@@ -20,6 +20,7 @@ import Financeiro from '@/pages/Financeiro'
 import Materiais from '@/pages/Materiais'
 import Ferramentas from '@/pages/Ferramentas'
 import Configuracoes from '@/pages/Configuracoes'
+import Planos from '@/pages/Planos'
 import Login from '@/pages/Login'
 import Cadastro from '@/pages/Cadastro'
 import Admin from '@/pages/Admin'
@@ -84,6 +85,7 @@ export default function App() {
                 <Route path="materiais" element={<Materiais />} />
                 <Route path="ferramentas" element={<Ferramentas />} />
                 <Route path="configuracoes" element={<Configuracoes />} />
+                <Route path="planos" element={<Planos />} />
                 <Route path="admin" element={<Admin />} />
                 <Route path="login" element={<Login />} />
                 <Route path="cadastro" element={<Cadastro />} />

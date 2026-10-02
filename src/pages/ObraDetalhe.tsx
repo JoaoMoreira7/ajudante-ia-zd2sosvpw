@@ -5,6 +5,11 @@ import { Obra, DiarioObra, Orcamento, DocumentoObra } from '@/types/database'
 import { mutateEntity } from '@/lib/syncService'
 import { useAuth } from '@/contexts/AuthContext'
 import {
+  verificarPermissaoDocumentosPdf,
+  verificarPermissaoDiarioVozEFotos,
+} from '@/lib/planLimits'
+import PlanUpgradeModal from '@/components/PlanUpgradeModal'
+import {
   HardHat,
   MapPin,
   Calendar,
@@ -40,7 +45,7 @@ import { gerarEImprimirRecibo, gerarEImprimirOrdemServico } from '@/lib/document
 
 export const ObraDetalhe: React.FC = () => {
   const { id } = useParams<{ id: string }>()
-  const { isDono, config } = useAuth()
+  const { isDono, config, planoAtivo, user, isTrial } = useAuth()
   const [obra, setObra] = useState<Obra | null>(null)
   const [clienteObra, setClienteObra] = useState<any>(null)
   const [diarios, setDiarios] = useState<DiarioObra[]>([])
@@ -48,6 +53,11 @@ export const ObraDetalhe: React.FC = () => {
   const [dialogDiarioAberto, setDialogDiarioAberto] = useState(false)
   const [dialogFotoAberto, setDialogFotoAberto] = useState(false)
   const [capturandoGeo, setCapturandoGeo] = useState(false)
+
+  // Upgrade Modal
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
+  const [upgradeTitulo, setUpgradeTitulo] = useState('Recurso Disponível no Plano Profissional')
+  const [upgradeMensagem, setUpgradeMensagem] = useState('')
 
   // Modais de Recibo e Ordem de Serviço
   const [modalReciboOpen, setModalReciboOpen] = useState(false)
@@ -110,6 +120,20 @@ export const ObraDetalhe: React.FC = () => {
     e.preventDefault()
     if (!servico.trim()) return
 
+    const validacao = verificarPermissaoDiarioVozEFotos(
+      planoAtivo,
+      'diario',
+      user?.modulos_liberados,
+      isTrial,
+    )
+    if (!validacao.permitido) {
+      setDialogDiarioAberto(false)
+      setUpgradeTitulo('Diário de Obra Avançado')
+      setUpgradeMensagem(validacao.mensagemBloqueio || 'Disponível no Plano Profissional.')
+      setUpgradeModalOpen(true)
+      return
+    }
+
     const novoDiario: DiarioObra = {
       id: 'dia_' + Date.now(),
       owner_id: obra.owner_id || 'local_user',
@@ -152,6 +176,19 @@ export const ObraDetalhe: React.FC = () => {
   const handleCapturarFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+
+    const validacao = verificarPermissaoDiarioVozEFotos(
+      planoAtivo,
+      'fotos',
+      user?.modulos_liberados,
+      isTrial,
+    )
+    if (!validacao.permitido) {
+      setUpgradeTitulo('Registro Fotográfico por Obra')
+      setUpgradeMensagem(validacao.mensagemBloqueio || 'Disponível no Plano Profissional.')
+      setUpgradeModalOpen(true)
+      return
+    }
 
     const now = new Date()
     const dataHoraFormatada = now.toLocaleString('pt-BR')
@@ -293,6 +330,15 @@ export const ObraDetalhe: React.FC = () => {
   }
 
   const handleGerarRecibo = async () => {
+    const validacao = verificarPermissaoDocumentosPdf(planoAtivo, user?.modulos_liberados, isTrial)
+    if (!validacao.permitido) {
+      setModalReciboOpen(false)
+      setUpgradeTitulo('Emissão de Recibos em PDF')
+      setUpgradeMensagem(validacao.mensagemBloqueio || 'Disponível no Plano Profissional.')
+      setUpgradeModalOpen(true)
+      return
+    }
+
     const val =
       parseFloat(reciboValor.replace(',', '.')) || obra.valor_recebido || obra.valor_contratado || 0
     await gerarEImprimirRecibo(
@@ -315,6 +361,15 @@ export const ObraDetalhe: React.FC = () => {
   }
 
   const handleGerarOS = async () => {
+    const validacao = verificarPermissaoDocumentosPdf(planoAtivo, user?.modulos_liberados, isTrial)
+    if (!validacao.permitido) {
+      setModalOsOpen(false)
+      setUpgradeTitulo('Ordem de Serviço em PDF')
+      setUpgradeMensagem(validacao.mensagemBloqueio || 'Disponível no Plano Profissional.')
+      setUpgradeModalOpen(true)
+      return
+    }
+
     const val = parseFloat(osValor.replace(',', '.')) || obra.valor_contratado || 0
     const servicosEtapas = (obra.etapas || []).map((et) => ({
       descricao: et.nome,
@@ -898,6 +953,14 @@ export const ObraDetalhe: React.FC = () => {
           </div>
         )}
       </div>
+      {/* Modal de Upgrade Amigável */}
+      <PlanUpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        titulo={upgradeTitulo}
+        mensagem={upgradeMensagem}
+        planoSugerido="profissional"
+      />
     </div>
   )
 }

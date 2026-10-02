@@ -608,7 +608,7 @@ export const AdminPage: React.FC = () => {
                           <TableCell className="py-3">
                             <div className="flex flex-col">
                               <span className="text-xs font-bold uppercase text-foreground">
-                                {item.assinatura?.plano || 'Profissional'}
+                                {item.assinatura?.plano || 'Essencial'}
                               </span>
                               <span className="text-[10px] text-muted-foreground capitalize">
                                 Ciclo: {item.assinatura?.ciclo || 'Mensal'}

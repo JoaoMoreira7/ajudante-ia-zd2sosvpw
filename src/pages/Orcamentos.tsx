@@ -2,15 +2,29 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { localDB } from '@/lib/localDB'
 import { Orcamento } from '@/types/database'
-import { FileSpreadsheet, Plus, MessageSquare, CheckCircle, Clock, ShieldAlert } from 'lucide-react'
+import {
+  FileSpreadsheet,
+  Plus,
+  MessageSquare,
+  CheckCircle,
+  Clock,
+  ShieldAlert,
+  Sparkles,
+} from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/contexts/AuthContext'
+import { useNavigate } from 'react-router-dom'
+import { verificarLimiteOrcamentos } from '@/lib/planLimits'
+import PlanUpgradeModal from '@/components/PlanUpgradeModal'
 
 export const Orcamentos: React.FC = () => {
-  const { isOperador } = useAuth()
+  const { isOperador, planoAtivo, user, isTrial } = useAuth()
+  const navigate = useNavigate()
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([])
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
+  const [upgradeMensagem, setUpgradeMensagem] = useState('')
 
   useEffect(() => {
     localDB.getAll('orcamentos').then((list) => setOrcamentos(list))
@@ -79,13 +93,59 @@ export const Orcamentos: React.FC = () => {
           </p>
         </div>
 
-        <Link to="/orcamentos/novo">
-          <Button className="font-bold gap-2">
-            <Plus className="w-4 h-4" />
-            Novo Orçamento
-          </Button>
-        </Link>
+        <Button
+          onClick={() => {
+            const mesAtual = new Date().toISOString().slice(0, 7)
+            const orcsMes = orcamentos.filter((o) => (o.created || '').startsWith(mesAtual)).length
+            const validacao = verificarLimiteOrcamentos(
+              planoAtivo,
+              orcsMes,
+              user?.modulos_liberados,
+              isTrial,
+            )
+
+            if (!validacao.permitido) {
+              setUpgradeMensagem(
+                validacao.mensagemBloqueio ||
+                  'Você atingiu o limite mensal de orçamentos do seu plano. Faça upgrade para o Plano Profissional para emitir propostas ilimitadas.',
+              )
+              setUpgradeModalOpen(true)
+              return
+            }
+
+            navigate('/orcamentos/novo')
+          }}
+          className="font-bold gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          Novo Orçamento
+        </Button>
       </div>
+
+      {/* Aviso de limites no Plano Essencial */}
+      {planoAtivo === 'essencial' && !isTrial && (
+        <div className="p-3.5 rounded-xl bg-muted/40 border border-border flex items-center justify-between text-xs">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-primary shrink-0" />
+            <span>
+              <strong>Plano Essencial:</strong> até 10 orçamentos por mês.
+            </span>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setUpgradeMensagem(
+                'O Plano Profissional (R$ 49,90/mês) libera orçamentos ilimitados e envio de PDFs timbrados.',
+              )
+              setUpgradeModalOpen(true)
+            }}
+            className="h-7 text-xs font-bold"
+          >
+            Ilimitados no Profissional
+          </Button>
+        </div>
+      )}
 
       {/* Resumo */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -140,6 +200,14 @@ export const Orcamentos: React.FC = () => {
           </Link>
         ))}
       </div>
+      {/* Modal de Upgrade Amigável */}
+      <PlanUpgradeModal
+        isOpen={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        titulo="Limite de Orçamentos Atingido"
+        mensagem={upgradeMensagem}
+        planoSugerido="profissional"
+      />
     </div>
   )
 }

@@ -29,6 +29,7 @@ const navItems = [
   { label: 'Financeiro', path: '/financeiro', icon: DollarSign },
   { label: 'Materiais', path: '/materiais', icon: Package },
   { label: 'Ferramentas', path: '/ferramentas', icon: Wrench },
+  { label: 'Planos & Preços', path: '/planos', icon: ShieldCheck },
   { label: 'Configurações', path: '/configuracoes', icon: Settings },
   { label: 'Painel Admin', path: '/admin', icon: ShieldCheck, adminOnly: true },
 ]

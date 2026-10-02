@@ -13,13 +13,13 @@ import { Assinatura, FaturaVenda } from '@/types/database'
 describe('Motor Comercial - Catálogo e Métricas', () => {
   it('deve conter os 3 planos no catálogo com preços padrão', () => {
     expect(CATALOGO_PLANOS.length).toBe(3)
-    const [gratuito, profissional, empresa] = CATALOGO_PLANOS
-    expect(gratuito.id).toBe('gratuito')
-    expect(gratuito.precoMensal).toBe(0)
+    const [essencial, profissional, empresa] = CATALOGO_PLANOS
+    expect(essencial.id).toBe('essencial')
+    expect(essencial.precoMensal).toBe(29.9)
     expect(profissional.id).toBe('profissional')
-    expect(profissional.precoMensal).toBe(149.0)
+    expect(profissional.precoMensal).toBe(49.9)
     expect(empresa.id).toBe('empresa')
-    expect(empresa.precoMensal).toBe(299.0)
+    expect(empresa.precoMensal).toBe(79.9)
   })
 
   it('deve calcular métricas comerciais corretamente com faturas pagas, pendentes e canceladas', () => {
