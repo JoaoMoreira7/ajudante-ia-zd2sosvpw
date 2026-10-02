@@ -5,9 +5,22 @@ import { BottomNav } from './BottomNav'
 import { DesktopSidebar } from './DesktopSidebar'
 import { DesktopFooter } from './DesktopFooter'
 import { VoiceOverlay } from './VoiceOverlay'
+import { BlockedScreen } from './BlockedScreen'
+import { useAuth } from '@/contexts/AuthContext'
 
 export default function Layout() {
   const [isVoiceOpen, setIsVoiceOpen] = useState(false)
+  const { isBloqueado, motivoBloqueio, user } = useAuth()
+
+  if (isBloqueado) {
+    return (
+      <BlockedScreen
+        motivo={motivoBloqueio}
+        bloqueadoPor={user?.bloqueado_por_nome}
+        bloqueadoEm={user?.bloqueado_em}
+      />
+    )
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground antialiased selection:bg-primary/20">

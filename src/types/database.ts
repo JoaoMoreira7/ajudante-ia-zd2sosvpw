@@ -1,12 +1,36 @@
 // Tipos completos das entidades do Ajudante IA
 
-export type UserRole = 'dono' | 'operador'
+export type UserRole = 'admin' | 'dono' | 'operador'
+
+export type StatusConta =
+  | 'ativo'
+  | 'trial'
+  | 'atrasado'
+  | 'bloqueado_manual'
+  | 'bloqueado_inadimplencia'
+  | 'cancelado'
+
+export type PlanoTipo = 'gratuito' | 'profissional' | 'empresa'
+export type CicloTipo = 'mensal' | 'trimestral' | 'semestral' | 'anual'
+export type OrigemVenda = 'direta' | 'internet'
+export type FormaPagamentoVenda =
+  | 'pix'
+  | 'dinheiro'
+  | 'boleto'
+  | 'transferencia'
+  | 'cartao_credito'
+  | 'outro'
 
 export interface UserProfile {
   id: string
   email: string
   name: string
   perfil?: UserRole
+  status_conta?: StatusConta
+  motivo_bloqueio?: string
+  bloqueado_em?: string
+  bloqueado_por_nome?: string
+  modulos_liberados?: Record<string, boolean>
   avatar?: string
   created?: string
   updated?: string
@@ -208,4 +232,84 @@ export interface ReversibleAction {
   descricao: string
   timestamp: number
   desfazer: () => Promise<void>
+}
+
+export interface Assinatura {
+  id: string
+  user_id: string
+  plano: PlanoTipo
+  ciclo: CicloTipo
+  valor_recorrente: number
+  status: StatusConta
+  origem: OrigemVenda
+  data_inicio: string
+  proximo_vencimento?: string
+  bloqueio_manual?: boolean
+  motivo_bloqueio?: string
+  bloqueado_em?: string
+  bloqueado_por_id?: string
+  bloqueado_por_nome?: string
+  modulos_liberados?: Record<string, boolean>
+  observacoes?: string
+  created?: string
+  updated?: string
+  expand?: {
+    user_id?: UserProfile
+  }
+}
+
+export interface FaturaVenda {
+  id: string
+  user_id: string
+  assinatura_id?: string
+  descricao: string
+  valor: number
+  status: 'pago' | 'pendente' | 'atrasado' | 'cancelado'
+  origem: OrigemVenda
+  forma_pagamento: FormaPagamentoVenda
+  data_vencimento: string
+  data_pagamento?: string
+  comprovante_ref?: string
+  observacoes?: string
+  created?: string
+  updated?: string
+  expand?: {
+    user_id?: UserProfile
+  }
+}
+
+export interface AuditoriaAdmin {
+  id: string
+  admin_id: string
+  admin_nome: string
+  alvo_user_id: string
+  alvo_user_nome?: string
+  alvo_user_email?: string
+  acao: 'bloquear' | 'liberar' | 'venda_direta' | 'liberar_modulos' | 'atualizar_plano'
+  motivo?: string
+  detalhes?: Record<string, unknown>
+  ip?: string
+  created?: string
+  updated?: string
+}
+
+export interface NotificacaoSistema {
+  id: string
+  user_id: string
+  titulo: string
+  mensagem: string
+  tipo: 'bloqueio' | 'liberacao' | 'venda_ativada' | 'fatura_vencida' | 'aviso_geral'
+  lida: boolean
+  created?: string
+  updated?: string
+}
+
+export interface CatalogoPlano {
+  id: PlanoTipo
+  nome: string
+  descricao: string
+  precoMensal: number
+  precoAnual: number
+  recursos: string[]
+  destaque?: boolean
 }

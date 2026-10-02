@@ -2,9 +2,19 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
-import { Wifi, WifiOff, HardHat, Sparkles, Feather, RefreshCw, CheckCircle } from 'lucide-react'
+import {
+  Wifi,
+  WifiOff,
+  HardHat,
+  Sparkles,
+  Feather,
+  RefreshCw,
+  CheckCircle,
+  ShieldCheck,
+} from 'lucide-react'
 import { subscribeSyncStatus, syncNow, SyncStatus } from '@/lib/syncService'
 import { toast } from '@/hooks/use-toast'
+import { NotificationBell } from '@/components/NotificationBell'
 import {
   Select,
   SelectContent,
@@ -15,7 +25,7 @@ import {
 import { Link } from 'react-router-dom'
 
 export const TopBar: React.FC = () => {
-  const { config, setModo } = useAuth()
+  const { config, setModo, user, isAdmin } = useAuth()
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
     isSyncing: false,
@@ -191,6 +201,21 @@ export const TopBar: React.FC = () => {
             )}
           </TooltipContent>
         </Tooltip>
+
+        {/* Link direto para o Admin se for Administrador */}
+        {isAdmin && (
+          <Link
+            to="/admin"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 transition-all"
+            title="Acessar Painel do Administrador"
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Admin</span>
+          </Link>
+        )}
+
+        {/* Sino de Notificações */}
+        <NotificationBell userId={user?.id} />
       </div>
     </header>
   )

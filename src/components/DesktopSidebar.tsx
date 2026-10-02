@@ -11,6 +11,7 @@ import {
   Package,
   Wrench,
   Settings,
+  ShieldCheck,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -29,12 +30,16 @@ const navItems = [
   { label: 'Materiais', path: '/materiais', icon: Package },
   { label: 'Ferramentas', path: '/ferramentas', icon: Wrench },
   { label: 'Configurações', path: '/configuracoes', icon: Settings },
+  { label: 'Painel Admin', path: '/admin', icon: ShieldCheck, adminOnly: true },
 ]
 
 export const DesktopSidebar: React.FC<SidebarProps> = ({ onOpenVoice }) => {
-  const { isOperador } = useAuth()
+  const { isOperador, isAdmin } = useAuth()
 
   const itensFiltrados = navItems.filter((item) => {
+    if (item.adminOnly && !isAdmin) {
+      return false
+    }
     if (isOperador) {
       // Oculta finanças e orçamentos da barra lateral para o perfil Operador
       if (item.path === '/financeiro' || item.path === '/orcamentos') {

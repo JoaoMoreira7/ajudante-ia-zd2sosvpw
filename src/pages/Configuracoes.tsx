@@ -52,6 +52,31 @@ export const Configuracoes: React.FC = () => {
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <button
             type="button"
+            onClick={() => setPerfil('admin')}
+            className={`p-4 rounded-xl border text-left transition-all ${
+              perfil === 'admin'
+                ? 'border-primary bg-primary/10 shadow-sm ring-1 ring-primary'
+                : 'border-border bg-card hover:bg-muted/40'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-black text-sm text-foreground">
+                🛡️ Administrador do Sistema
+              </span>
+              {perfil === 'admin' && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
+                  Ativo
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Acesso total ao Painel Admin, Gestão Comercial de assinaturas, controle de bloqueios
+              de clientes, registro de vendas diretas e logs de auditoria.
+            </p>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setPerfil('dono')}
             className={`p-4 rounded-xl border text-left transition-all ${
               perfil === 'dono'
@@ -68,11 +93,10 @@ export const Configuracoes: React.FC = () => {
               )}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Acesso total: visualiza orçamentos com preços, margens de lucro, faturamento, valores
-              contratados e controle financeiro completo.
+              Acesso às obras: visualiza orçamentos com preços, margens de lucro, faturamento,
+              valores contratados e controle financeiro completo.
             </p>
           </button>
-
           <button
             type="button"
             onClick={() => setPerfil('operador')}

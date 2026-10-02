@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-02T22:15:09.373Z",
+  "generatedAt": "2026-10-02T22:28:04.995Z",
   "collections": [
     {
       "name": "users",
@@ -43,7 +43,45 @@
           "type": "select",
           "required": false,
           "system": false,
-          "selectValues": ["dono", "operador"]
+          "selectValues": ["admin", "dono", "operador"]
+        },
+        {
+          "name": "status_conta",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": [
+            "ativo",
+            "trial",
+            "atrasado",
+            "bloqueado_manual",
+            "bloqueado_inadimplencia",
+            "cancelado"
+          ]
+        },
+        {
+          "name": "motivo_bloqueio",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "bloqueado_em",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "bloqueado_por_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "modulos_liberados",
+          "type": "json",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -835,6 +873,404 @@
         }
       ],
       "indexes": ["CREATE UNIQUE INDEX idx_config_owner ON configuracoes (owner_id)"]
+    },
+    {
+      "name": "notificacoes_sistema",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user_id = @request.auth.id || @request.auth.perfil = 'admin')",
+        "view": "@request.auth.id != '' && (user_id = @request.auth.id || @request.auth.perfil = 'admin')",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && (user_id = @request.auth.id || @request.auth.perfil = 'admin')",
+        "delete": "@request.auth.id != '' && (user_id = @request.auth.id || @request.auth.perfil = 'admin')"
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "titulo",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "mensagem",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "tipo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "bloqueio",
+            "liberacao",
+            "venda_ativada",
+            "fatura_vencida",
+            "aviso_geral"
+          ]
+        },
+        {
+          "name": "lida",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE INDEX idx_notif_user ON notificacoes_sistema (user_id)"]
+    },
+    {
+      "name": "assinaturas",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user_id = @request.auth.id || @request.auth.perfil = 'admin')",
+        "view": "@request.auth.id != '' && (user_id = @request.auth.id || @request.auth.perfil = 'admin')",
+        "create": "@request.auth.id != '' && @request.auth.perfil = 'admin'",
+        "update": "@request.auth.id != '' && @request.auth.perfil = 'admin'",
+        "delete": "@request.auth.id != '' && @request.auth.perfil = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "plano",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["gratuito", "profissional", "empresa"]
+        },
+        {
+          "name": "ciclo",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["mensal", "trimestral", "semestral", "anual"]
+        },
+        {
+          "name": "valor_recorrente",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "ativo",
+            "trial",
+            "atrasado",
+            "bloqueado_manual",
+            "bloqueado_inadimplencia",
+            "cancelado"
+          ]
+        },
+        {
+          "name": "origem",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["direta", "internet"]
+        },
+        {
+          "name": "data_inicio",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "proximo_vencimento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "bloqueio_manual",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "motivo_bloqueio",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "bloqueado_em",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "bloqueado_por_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "bloqueado_por_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "modulos_liberados",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_assinaturas_user ON assinaturas (user_id)",
+        "CREATE INDEX idx_assinaturas_status ON assinaturas (status)",
+        "CREATE INDEX idx_assinaturas_origem ON assinaturas (origem)"
+      ]
+    },
+    {
+      "name": "faturas_venda",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (user_id = @request.auth.id || @request.auth.perfil = 'admin')",
+        "view": "@request.auth.id != '' && (user_id = @request.auth.id || @request.auth.perfil = 'admin')",
+        "create": "@request.auth.id != '' && @request.auth.perfil = 'admin'",
+        "update": "@request.auth.id != '' && @request.auth.perfil = 'admin'",
+        "delete": "@request.auth.id != '' && @request.auth.perfil = 'admin'"
+      },
+      "fields": [
+        {
+          "name": "user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "assinatura_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "assinaturas"
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "valor",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pago", "pendente", "atrasado", "cancelado"]
+        },
+        {
+          "name": "origem",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["direta", "internet"]
+        },
+        {
+          "name": "forma_pagamento",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["pix", "dinheiro", "boleto", "transferencia", "cartao_credito", "outro"]
+        },
+        {
+          "name": "data_vencimento",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "data_pagamento",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "comprovante_ref",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "observacoes",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_faturas_user ON faturas_venda (user_id)",
+        "CREATE INDEX idx_faturas_status ON faturas_venda (status)",
+        "CREATE INDEX idx_faturas_origem ON faturas_venda (origem)"
+      ]
+    },
+    {
+      "name": "auditoria_admin",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && @request.auth.perfil = 'admin'",
+        "view": "@request.auth.id != '' && @request.auth.perfil = 'admin'",
+        "create": "@request.auth.id != '' && @request.auth.perfil = 'admin'",
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "admin_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "admin_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "alvo_user_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "alvo_user_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "alvo_user_email",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "acao",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": [
+            "bloquear",
+            "liberar",
+            "venda_direta",
+            "liberar_modulos",
+            "atualizar_plano"
+          ]
+        },
+        {
+          "name": "motivo",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "detalhes",
+          "type": "json",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ip",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_audit_admin ON auditoria_admin (admin_id)",
+        "CREATE INDEX idx_audit_alvo ON auditoria_admin (alvo_user_id)",
+        "CREATE INDEX idx_audit_acao ON auditoria_admin (acao)"
+      ]
     }
   ]
 }

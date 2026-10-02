@@ -29,7 +29,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { mutateEntity } from '@/lib/syncService'
-import { pb } from '@/lib/pocketbase/client'
+import pb from '@/lib/pocketbase/client'
 
 export const Calculadora: React.FC = () => {
   // 1. ÁREA

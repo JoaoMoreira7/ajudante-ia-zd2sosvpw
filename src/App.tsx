@@ -22,6 +22,7 @@ import Ferramentas from '@/pages/Ferramentas'
 import Configuracoes from '@/pages/Configuracoes'
 import Login from '@/pages/Login'
 import Cadastro from '@/pages/Cadastro'
+import Admin from '@/pages/Admin'
 import NotFound from '@/pages/NotFound'
 
 export default function App() {
@@ -83,6 +84,7 @@ export default function App() {
                 <Route path="materiais" element={<Materiais />} />
                 <Route path="ferramentas" element={<Ferramentas />} />
                 <Route path="configuracoes" element={<Configuracoes />} />
+                <Route path="admin" element={<Admin />} />
                 <Route path="login" element={<Login />} />
                 <Route path="cadastro" element={<Cadastro />} />
                 <Route path="*" element={<NotFound />} />

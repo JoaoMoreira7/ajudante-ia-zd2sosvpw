@@ -1,12 +1,15 @@
 import React from 'react'
 import { NavLink } from 'react-router-dom'
-import { Home, Mic, HardHat, MoreHorizontal } from 'lucide-react'
+import { Home, Mic, HardHat, MoreHorizontal, ShieldCheck } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface BottomNavProps {
   onOpenVoice: () => void
 }
 
 export const BottomNav: React.FC<BottomNavProps> = ({ onOpenVoice }) => {
+  const { isAdmin } = useAuth()
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border flex items-center justify-around h-16 px-2 lg:hidden shadow-lg safe-area-pb">
       {/* Início (casa) */}
@@ -47,18 +50,32 @@ export const BottomNav: React.FC<BottomNavProps> = ({ onOpenVoice }) => {
         <span>Obras</span>
       </NavLink>
 
-      {/* Mais (Menu / Ferramentas / Configurações) */}
-      <NavLink
-        to="/configuracoes"
-        className={({ isActive }) =>
-          `flex flex-col items-center justify-center flex-1 h-full py-1 text-xs font-medium transition-colors ${
-            isActive ? 'text-primary font-bold' : 'text-muted-foreground hover:text-foreground'
-          }`
-        }
-      >
-        <MoreHorizontal className="w-5 h-5 mb-0.5" />
-        <span>Mais</span>
-      </NavLink>
+      {/* Painel Admin se for administrador, senão Mais */}
+      {isAdmin ? (
+        <NavLink
+          to="/admin"
+          className={({ isActive }) =>
+            `flex flex-col items-center justify-center flex-1 h-full py-1 text-xs font-medium transition-colors ${
+              isActive ? 'text-primary font-bold' : 'text-muted-foreground hover:text-foreground'
+            }`
+          }
+        >
+          <ShieldCheck className="w-5 h-5 mb-0.5" />
+          <span>Admin</span>
+        </NavLink>
+      ) : (
+        <NavLink
+          to="/configuracoes"
+          className={({ isActive }) =>
+            `flex flex-col items-center justify-center flex-1 h-full py-1 text-xs font-medium transition-colors ${
+              isActive ? 'text-primary font-bold' : 'text-muted-foreground hover:text-foreground'
+            }`
+          }
+        >
+          <MoreHorizontal className="w-5 h-5 mb-0.5" />
+          <span>Mais</span>
+        </NavLink>
+      )}
     </nav>
   )
 }

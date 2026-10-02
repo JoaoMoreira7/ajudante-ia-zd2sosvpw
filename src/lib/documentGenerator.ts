@@ -1,5 +1,5 @@
 import { mutateEntity } from './syncService'
-import { pb } from './pocketbase/client'
+import pb from './pocketbase/client'
 
 export interface DadosRecibo {
   profissionalNome: string
