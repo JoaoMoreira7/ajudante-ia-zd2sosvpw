@@ -11,6 +11,9 @@ import {
   CheckCircle,
   AlertTriangle,
   Info,
+  ShoppingCart,
+  Share2,
+  FileText,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -18,6 +21,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { mutateEntity } from '@/lib/syncService'
+import { pb } from '@/lib/pocketbase/client'
 
 export const Calculadora: React.FC = () => {
   // 1. ÁREA
@@ -58,6 +70,12 @@ export const Calculadora: React.FC = () => {
   // 9. TELHADO
   const [telhArea, setTelhArea] = useState('60')
   const [telhInc, setTelhInc] = useState('30')
+
+  // Estado para modal "Gerar lista de materiais"
+  const [listaMateriaisModal, setListaMateriaisModal] =
+    useState<MathEngine.ListaMateriaisEstimativa | null>(null)
+  const [salvandoLista, setSalvandoLista] = useState(false)
+  const [listaSalvaSucesso, setListaSalvaSucesso] = useState(false)
 
   // Execuções determinísticas puras
   const resArea = descontarPorta
@@ -109,6 +127,58 @@ export const Calculadora: React.FC = () => {
     areaPlantaM2: parseFloat(telhArea) || 0,
     inclinacaoPct: parseFloat(telhInc) || 30,
   })
+
+  const abrirListaMateriais = (
+    servico: 'alvenaria' | 'reboco' | 'contrapiso' | 'concreto' | 'piso' | 'pintura' | 'telhado',
+    medida: number,
+    perda = 10,
+  ) => {
+    const res = MathEngine.gerarEstimativaMateriais(servico, medida, perda)
+    setListaMateriaisModal(res.valor)
+    setListaSalvaSucesso(false)
+  }
+
+  const salvarListaNosDocumentos = async () => {
+    if (!listaMateriaisModal) return
+    setSalvandoLista(true)
+    try {
+      const conteudoTexto =
+        `LISTA DE MATERIAIS (${listaMateriaisModal.tipoServico.toUpperCase()})\n` +
+        `Medida: ${listaMateriaisModal.areaOuVolume} ${listaMateriaisModal.unidadeMedida} (+${listaMateriaisModal.perdaPct}% perda)\n\n` +
+        listaMateriaisModal.itens
+          .map(
+            (it) =>
+              `• ${it.nome}: ${it.quantidade} ${it.unidade}${it.observacao ? ` (${it.observacao})` : ''}`,
+          )
+          .join('\n') +
+        `\n\nAVISO: ${listaMateriaisModal.avisoLegal}`
+
+      await mutateEntity('documentos', 'create', {
+        id: 'doc_mat_' + Date.now(),
+        owner_id: pb.authStore.model?.id || 'local_user',
+        tipo: 'lista_materiais',
+        titulo: `Lista de Materiais - ${listaMateriaisModal.tipoServico.toUpperCase()} (${listaMateriaisModal.areaOuVolume} ${listaMateriaisModal.unidadeMedida})`,
+        conteudo_texto: conteudoTexto,
+      })
+      setListaSalvaSucesso(true)
+    } finally {
+      setSalvandoLista(false)
+    }
+  }
+
+  const compartilharListaWhatsApp = () => {
+    if (!listaMateriaisModal) return
+    const texto =
+      `*ESTIMATIVA DE MATERIAIS — ${listaMateriaisModal.tipoServico.toUpperCase()}*\n` +
+      `Para ${listaMateriaisModal.areaOuVolume} ${listaMateriaisModal.unidadeMedida} (com ${listaMateriaisModal.perdaPct}% folga):\n\n` +
+      listaMateriaisModal.itens
+        .map((it) => `• ${it.nome}: ${it.quantidade} ${it.unidade}`)
+        .join('\n') +
+      `\n\n⚠️ _${listaMateriaisModal.avisoLegal}_\n\nGerado por Ajudante IA`
+
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(texto)}`
+    window.open(url, '_blank')
+  }
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -370,6 +440,20 @@ export const Calculadora: React.FC = () => {
                 </div>
                 <p className="text-[11px] text-muted-foreground italic pt-2">⚠️ {resAlv.aviso}</p>
               </div>
+
+              <Button
+                onClick={() =>
+                  abrirListaMateriais(
+                    'alvenaria',
+                    parseFloat(alvArea) || 0,
+                    parseFloat(alvPerda) || 10,
+                  )
+                }
+                className="w-full font-bold gap-2 bg-primary text-primary-foreground h-11 rounded-xl shadow-xs"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Gerar Lista de Materiais da Alvenaria
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -430,7 +514,7 @@ export const Calculadora: React.FC = () => {
                     </span>
                   </div>
                   <div className="p-3 bg-card rounded-lg border">
-                    <span className="text-xs text-muted-foreground block">Areia Média</span>
+                    <span className="text-xs text-muted-foreground block">Areia Peneirada</span>
                     <span className="text-xl font-black text-foreground">
                       ~{resReb.valor.areiaM3} m³
                     </span>
@@ -438,10 +522,17 @@ export const Calculadora: React.FC = () => {
                 </div>
                 <p className="text-[11px] text-muted-foreground italic pt-2">⚠️ {resReb.aviso}</p>
               </div>
+
+              <Button
+                onClick={() => abrirListaMateriais('reboco', parseFloat(rebArea) || 0, 10)}
+                className="w-full font-bold gap-2 bg-primary text-primary-foreground h-11 rounded-xl shadow-xs"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Gerar Lista de Materiais do Reboco
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
-
         {/* 5. ABA CONTRAPISO */}
         <TabsContent value="contrapiso" className="mt-4 space-y-4">
           <Card>
@@ -481,6 +572,14 @@ export const Calculadora: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              <Button
+                onClick={() => abrirListaMateriais('pintura', parseFloat(pintArea) || 0, 10)}
+                className="w-full font-bold gap-2 bg-primary text-primary-foreground h-11 rounded-xl shadow-xs"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Gerar Lista de Materiais da Pintura
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -541,6 +640,14 @@ export const Calculadora: React.FC = () => {
                   ⚠️ {resConc.aviso}
                 </div>
               </div>
+
+              <Button
+                onClick={() => abrirListaMateriais('concreto', parseFloat(concVol) || 0, 10)}
+                className="w-full font-bold gap-2 bg-primary text-primary-foreground h-11 rounded-xl shadow-xs"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Gerar Lista de Materiais do Concreto
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -598,6 +705,20 @@ export const Calculadora: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              <Button
+                onClick={() =>
+                  abrirListaMateriais(
+                    'piso',
+                    parseFloat(pisoArea) || 0,
+                    parseFloat(pisoPerda) || 10,
+                  )
+                }
+                className="w-full font-bold gap-2 bg-primary text-primary-foreground h-11 rounded-xl shadow-xs"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Gerar Lista de Materiais do Piso
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -704,10 +825,96 @@ export const Calculadora: React.FC = () => {
                 </div>
                 <p className="text-[11px] text-muted-foreground italic pt-2">⚠️ {resTelh.aviso}</p>
               </div>
+
+              <Button
+                onClick={() => abrirListaMateriais('telhado', parseFloat(telhArea) || 0, 10)}
+                className="w-full font-bold gap-2 bg-primary text-primary-foreground h-11 rounded-xl shadow-xs"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Gerar Lista de Materiais do Telhado
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* DIÁLOGO / MODAL DE LISTA DE MATERIAIS */}
+      <Dialog
+        open={!!listaMateriaisModal}
+        onOpenChange={(open) => !open && setListaMateriaisModal(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <ShoppingCart className="w-5 h-5 text-primary" />
+              Lista de Materiais Estimada
+            </DialogTitle>
+          </DialogHeader>
+
+          {listaMateriaisModal && (
+            <div className="space-y-4 mt-2">
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs">
+                <strong>ATENÇÃO:</strong> {listaMateriaisModal.avisoLegal}
+              </div>
+
+              <div className="text-xs text-muted-foreground">
+                Serviço:{' '}
+                <strong className="text-foreground capitalize">
+                  {listaMateriaisModal.tipoServico}
+                </strong>{' '}
+                • Medida:{' '}
+                <strong className="text-foreground">
+                  {listaMateriaisModal.areaOuVolume} {listaMateriaisModal.unidadeMedida}
+                </strong>{' '}
+                (+{listaMateriaisModal.perdaPct}% perda)
+              </div>
+
+              <div className="border rounded-xl divide-y max-h-60 overflow-y-auto">
+                {listaMateriaisModal.itens.map((it, idx) => (
+                  <div key={idx} className="p-3 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="font-bold text-foreground block">{it.nome}</span>
+                      {it.observacao && (
+                        <span className="text-[11px] text-muted-foreground">{it.observacao}</span>
+                      )}
+                    </div>
+                    <Badge variant="outline" className="font-mono font-bold text-primary">
+                      {it.quantidade} {it.unidade}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+
+              {listaSalvaSucesso && (
+                <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs font-bold text-center">
+                  ✓ Lista salva com sucesso em Documentos!
+                </div>
+              )}
+
+              <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={compartilharListaWhatsApp}
+                  className="font-bold text-xs gap-1.5 text-emerald-600 border-emerald-300 hover:bg-emerald-50"
+                >
+                  <Share2 className="w-4 h-4" />
+                  WhatsApp
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={salvarListaNosDocumentos}
+                  disabled={salvandoLista || listaSalvaSucesso}
+                  className="font-bold text-xs gap-1.5"
+                >
+                  <FileText className="w-4 h-4" />
+                  {listaSalvaSucesso ? 'Salvo em Documentos' : 'Salvar em Documentos'}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

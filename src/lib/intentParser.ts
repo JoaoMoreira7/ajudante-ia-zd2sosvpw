@@ -25,20 +25,44 @@ export interface ParsedIntent {
 export function parseLocalIntent(text: string, context?: Record<string, any>): ParsedIntent {
   const clean = text.toLowerCase().trim()
 
-  // 1. DESFAZER / CORRIGIR / CANCELAR
+  // 1. DESFAZER / CORRIGIR / CANCELAR / APAGA O ÚLTIMO
   if (
-    /\b(desfaz|desfazer|corrige|corrigir|cancela|cancelar|apaga o último|desfazer último)\b/.test(
+    /\b(desfaz|desfazer|corrige|corrigir|cancela|cancelar|apaga o último|apagar o último|apaga o ultimo|apagar o ultimo|desfazer último|desfazer o ultimo)\b/.test(
       clean,
     )
   ) {
+    // Se for especificamente cancelar um fluxo em andamento
+    const isCancelFluxo = clean === 'cancela' || clean === 'cancelar' || clean === 'abortar'
     return {
-      intent: 'acao_desfazer',
-      confidence: 0.95,
-      params: {},
+      intent: isCancelFluxo && context?.fluxoAtivo ? 'fluxo_cancelar' : 'acao_desfazer',
+      confidence: 0.98,
+      params: { tipo: isCancelFluxo ? 'cancelar' : 'desfazer' },
       rawText: text,
-      respostaSugerida: 'Deseja desfazer a última ação registrada?',
+      respostaSugerida: isCancelFluxo
+        ? 'Operação cancelada.'
+        : 'Deseja desfazer a última ação registrada?',
       categoriaAcao: 'sistema',
-      requerConfirmacao: true,
+      requerConfirmacao: false,
+    }
+  }
+
+  // 1.1 RESPOSTAS DE SIM / NÃO / CONFIRMAÇÃO
+  if (/^(sim|claro|pode|confirma|confirmar|com certeza|positivo|isso|beleza|ok)$/.test(clean)) {
+    return {
+      intent: 'resposta_afirmativa',
+      confidence: 0.98,
+      params: { resposta: true },
+      rawText: text,
+      categoriaAcao: 'sistema',
+    }
+  }
+  if (/^(não|nao|negativo|nunca|dispensa|pula|sem material|sem materiais)$/.test(clean)) {
+    return {
+      intent: 'resposta_negativa',
+      confidence: 0.98,
+      params: { resposta: false },
+      rawText: text,
+      categoriaAcao: 'sistema',
     }
   }
 
@@ -305,23 +329,78 @@ export function parseLocalIntent(text: string, context?: Record<string, any>): P
     }
   }
 
-  // 14. ORÇAMENTOS
-  // Ex: "Faz o orçamento" ou "Cria um orçamento para fazer uma parede de 20 metros quadrados"
-  if (/\b(faz o orçamento|fazer orçamento|cria um orçamento|novo orçamento)\b/.test(clean)) {
-    const areaMatch = clean.match(/([0-9.,]+)\s*(?:m2|metros)/)
+  // 14. ORÇAMENTOS POR VOZ (INÍCIO DE FLUXO OU COMANDOS DIRETOS)
+  // Ex: "Cria um orçamento para fazer uma parede de 20 metros quadrados" ou "Faz o orçamento da parede"
+  if (
+    /\b(faz o orçamento|fazer orçamento|cria um orçamento|criar um orçamento|novo orçamento|orçamento para|orcamento para)\b/.test(
+      clean,
+    )
+  ) {
+    const areaMatch = clean.match(/([0-9.,]+)\s*(?:m2|metros\s+quadrados|metros)/)
+    const area = areaMatch
+      ? parseFloat(areaMatch[1].replace(',', '.'))
+      : context?.areaLiquida || context?.areaBruta || 20
+
+    let servico = 'parede'
+    if (clean.includes('piso') || clean.includes('porcelanato')) servico = 'piso'
+    else if (clean.includes('reboco') || clean.includes('emboço')) servico = 'reboco'
+    else if (clean.includes('pintura') || clean.includes('pintar')) servico = 'pintura'
+    else if (clean.includes('contrapiso')) servico = 'contrapiso'
+    else if (clean.includes('telhado')) servico = 'telhado'
+    else if (clean.includes('concreto')) servico = 'concreto'
+
     return {
-      intent: 'criar_orcamento',
-      confidence: 0.9,
-      params: { area: areaMatch ? parseFloat(areaMatch[1].replace(',', '.')) : 20 },
+      intent: 'iniciar_orcamento_voz',
+      confidence: 0.95,
+      params: {
+        servico,
+        area,
+        clienteNome: context?.clienteNome || 'Cliente',
+      },
       rawText: text,
       categoriaAcao: 'orcamento',
     }
   }
 
-  // 15. DIÁRIO DE OBRA
-  // Ex: "Hoje fizemos 30 metros quadrados de reboco. Gastamos 8 sacos de cimento."
+  // 15. DIÁRIO DE OBRA: CONSULTA E REGISTRO
+  // Consulta: "O que eu fiz na obra do João ontem?" / "O que fiz na obra ontem?" / "Diário de ontem"
+  if (
+    /\b(o que eu fiz|o que fiz|o que foi feito|consultar diário|ver diário|diário da obra|relatório de ontem)\b/.test(
+      clean,
+    )
+  ) {
+    const obraMatch = clean.match(
+      /(?:na|da|de|da obra)\s+(?:obra\s+)?(?:do|da|de)?\s*([a-zá-ú\s]+?)(?:\s+ontem|\s+hoje|\s+na\s+segunda|\s+semana|\?|$)/,
+    )
+    const alvoObra = obraMatch ? obraMatch[1].replace(/^(obra|do|da|de)\s+/, '').trim() : ''
+
+    // Extrai expressão de data
+    let dataExpressao = 'hoje'
+    if (clean.includes('ontem')) dataExpressao = 'ontem'
+    else if (clean.includes('anteontem')) dataExpressao = 'anteontem'
+    else if (clean.includes('segunda')) dataExpressao = 'segunda'
+    else if (clean.includes('terça') || clean.includes('terca')) dataExpressao = 'terça'
+    else if (clean.includes('quarta')) dataExpressao = 'quarta'
+    else if (clean.includes('quinta')) dataExpressao = 'quinta'
+    else if (clean.includes('sexta')) dataExpressao = 'sexta'
+    else if (clean.includes('sábado') || clean.includes('sabado')) dataExpressao = 'sábado'
+    else if (clean.includes('semana passada')) dataExpressao = 'semana passada'
+
+    return {
+      intent: 'consultar_diario_obra',
+      confidence: 0.95,
+      params: {
+        termoObra: alvoObra,
+        dataExpressao,
+      },
+      rawText: text,
+      categoriaAcao: 'obra',
+    }
+  }
+
+  // Registro: "Hoje fizemos 30 metros quadrados de reboco. Gastamos 8 sacos de cimento."
   const diarioMatch = clean.match(
-    /(?:hoje|ontem)?\s*(?:fizemos|assentamos|aplicamos)\s+([0-9.,]+)\s*(?:m2|metros)\s+de\s+([a-zá-ú\s]+)/,
+    /(?:hoje|ontem)?\s*(?:fizemos|assentamos|aplicamos|trabalhamos|executamos)\s+([0-9.,]+)\s*(?:m2|metros|m²)?\s+(?:de\s+)?([a-zá-ú\s]+)/,
   )
   if (diarioMatch) {
     return {

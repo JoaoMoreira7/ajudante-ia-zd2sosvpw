@@ -801,6 +801,303 @@ export interface MovimentacaoEstoqueOutput {
   mensagem: string
 }
 
+// -------------------------------------------------------------
+// 6. ESTIMATIVAS DETERMINÍSTICAS DE MATERIAIS PARA LISTA DE COMPRAS
+// -------------------------------------------------------------
+
+export interface ItemEstimativaMaterial {
+  nome: string
+  quantidade: number
+  unidade: 'saco' | 'un' | 'kg' | 'L' | 'm2'
+  categoria: string
+  observacao?: string
+}
+
+export interface ListaMateriaisEstimativa {
+  tipoServico: string
+  areaOuVolume: number
+  unidadeMedida: string
+  perdaPct: number
+  itens: ItemEstimativaMaterial[]
+  avisoLegal: string
+}
+
+/**
+ * Produz a lista consolidada de materiais a partir de medidas e serviço.
+ * SEMPRE rotulado com a advertência obrigatória.
+ */
+export function gerarEstimativaMateriais(
+  servico: 'alvenaria' | 'reboco' | 'contrapiso' | 'concreto' | 'piso' | 'pintura' | 'telhado',
+  medida: number,
+  perdaPct = 10,
+): CalculationResult<ListaMateriaisEstimativa> {
+  const p = Math.max(0, perdaPct)
+  const itens: ItemEstimativaMaterial[] = []
+  let unidadeMedida = 'm²'
+
+  if (servico === 'alvenaria') {
+    const res = calcularAlvenaria({ areaM2: medida, perdaPct: p })
+    itens.push(
+      {
+        nome: 'Bloco Cerâmico 14x19x29',
+        quantidade: res.valor.quantidadeBlocos,
+        unidade: 'un',
+        categoria: 'alvenaria',
+        observacao: `Consumo médio com ${p}% de perda/recorte`,
+      },
+      {
+        nome: 'Cimento CP II 50kg',
+        quantidade: Math.ceil(res.valor.cimentoKg / 50),
+        unidade: 'saco',
+        categoria: 'cimento',
+        observacao: `Aprox. ${res.valor.cimentoKg} kg no traço 1:2:8`,
+      },
+      {
+        nome: 'Areia Média Lavada',
+        quantidade: res.valor.areiaM3,
+        unidade: 'm2',
+        categoria: 'areia',
+        observacao: 'Para argamassa de assentamento',
+      },
+    )
+  } else if (servico === 'reboco') {
+    const res = calcularReboco({ areaM2: medida, perdaPct: p, espessuraCm: 2 })
+    itens.push(
+      {
+        nome: 'Cimento CP II 50kg',
+        quantidade: res.valor.cimentoSacos50kg,
+        unidade: 'saco',
+        categoria: 'cimento',
+        observacao: 'Traço para reboco/emboço',
+      },
+      {
+        nome: 'Cal Hidratada 20kg',
+        quantidade: res.valor.calSacos20kg || Math.ceil(res.valor.cimentoSacos50kg * 1.2),
+        unidade: 'saco',
+        categoria: 'outros',
+        observacao: 'Para liga e retenção de água',
+      },
+      {
+        nome: 'Areia Média Lavada',
+        quantidade: res.valor.areiaM3,
+        unidade: 'm2',
+        categoria: 'areia',
+        observacao: 'Areia peneirada',
+      },
+    )
+  } else if (servico === 'contrapiso') {
+    const res = calcularContrapiso({ areaM2: medida, perdaPct: p, espessuraCm: 4 })
+    itens.push(
+      {
+        nome: 'Cimento CP II 50kg',
+        quantidade: res.valor.cimentoSacos50kg,
+        unidade: 'saco',
+        categoria: 'cimento',
+        observacao: 'Argamassa farofa 1:4',
+      },
+      {
+        nome: 'Areia Média Lavada',
+        quantidade: res.valor.areiaM3,
+        unidade: 'm2',
+        categoria: 'areia',
+      },
+    )
+  } else if (servico === 'concreto') {
+    unidadeMedida = 'm³'
+    const res = calcularConcreto({ volumeM3: medida, perdaPct: p })
+    itens.push(
+      {
+        nome: 'Cimento CP II 50kg',
+        quantidade: res.valor.cimentoSacos50kg,
+        unidade: 'saco',
+        categoria: 'cimento',
+      },
+      {
+        nome: 'Areia Grossa Lavada',
+        quantidade: res.valor.areiaM3,
+        unidade: 'm2',
+        categoria: 'areia',
+      },
+      {
+        nome: 'Brita nº 1',
+        quantidade: res.valor.britaM3,
+        unidade: 'm2',
+        categoria: 'outros',
+      },
+    )
+  } else if (servico === 'piso') {
+    const res = calcularPiso({ areaM2: medida, perdaPct: p })
+    itens.push(
+      {
+        nome: 'Piso / Revestimento Cerâmico',
+        quantidade: res.valor.areaTotalComPerda,
+        unidade: 'm2',
+        categoria: 'outros',
+        observacao: `${res.valor.caixasPiso} caixas (base 2m²/cx)`,
+      },
+      {
+        nome: 'Argamassa Colante AC-II 20kg',
+        quantidade: res.valor.argamassaColanteSacos20kg,
+        unidade: 'saco',
+        categoria: 'cimento',
+      },
+      {
+        nome: 'Rejunte',
+        quantidade: res.valor.rejunteKg,
+        unidade: 'kg',
+        categoria: 'outros',
+      },
+    )
+  } else if (servico === 'pintura') {
+    const res = calcularPintura({ areaM2: medida, demaos: 2 })
+    itens.push(
+      {
+        nome: 'Tinta Látex / Acrílica 18L',
+        quantidade: Math.max(1, res.valor.latas18L),
+        unidade: 'un',
+        categoria: 'outros',
+        observacao: `Aprox. ${res.valor.litrosTinta} litros para 2 demãos`,
+      },
+      {
+        nome: 'Fita Crepe e Lixas para Parede',
+        quantidade: 2,
+        unidade: 'un',
+        categoria: 'ferramenta',
+      },
+    )
+  } else if (servico === 'telhado') {
+    const res = calcularTelhado({ areaPlantaM2: medida, inclinacaoPct: 30, perdaPct: p })
+    itens.push(
+      {
+        nome: 'Telha Cerâmica Romana',
+        quantidade: res.valor.quantidadeTelhas,
+        unidade: 'un',
+        categoria: 'outros',
+        observacao: `Para ${res.valor.areaInclinadaM2} m² de telhado real`,
+      },
+      {
+        nome: 'Cumeeiras Cerâmicas',
+        quantidade: Math.ceil(Math.sqrt(medida) * 3),
+        unidade: 'un',
+        categoria: 'outros',
+      },
+    )
+  }
+
+  const avisoLegal =
+    'ESTIMATIVA — não substitui projeto ou orientação técnica. Consumo médio na construção civil.'
+
+  return {
+    tipo: 'ESTIMATIVA',
+    valor: {
+      tipoServico: servico,
+      areaOuVolume: medida,
+      unidadeMedida,
+      perdaPct: p,
+      itens,
+      avisoLegal,
+    },
+    unidade: 'itens',
+    formula: `Estimativa para ${medida} ${unidadeMedida} de ${servico} (+${p}% folga)`,
+    passos: [
+      `Serviço selecionado: ${servico} (${medida} ${unidadeMedida})`,
+      `Margem de perda/folga aplicada: ${p}%`,
+      `Total de insumos calculados: ${itens.length} itens`,
+    ],
+    aviso: avisoLegal,
+  }
+}
+
+// -------------------------------------------------------------
+// 7. PARSER DETERMINÍSTICO DE DATAS RELATIVAS EM PT-BR
+// -------------------------------------------------------------
+
+/**
+ * Converte expressões relativas em português ("ontem", "hoje", "anteontem",
+ * "na segunda", "na terça", "semana passada", "há 3 dias") para YYYY-MM-DD
+ */
+export function parseRelativeDatePtBr(
+  expression: string,
+  baseDate: Date = new Date(),
+): { dateStr: string; label: string } | null {
+  if (!expression) return null
+  const clean = expression.toLowerCase().trim()
+  const d = new Date(baseDate.getTime())
+
+  // Hoje
+  if (/\b(hoje)\b/.test(clean)) {
+    return { dateStr: d.toISOString().split('T')[0], label: 'hoje' }
+  }
+
+  // Ontem
+  if (/\b(ontem)\b/.test(clean) && !clean.includes('anteontem')) {
+    d.setDate(d.getDate() - 1)
+    return { dateStr: d.toISOString().split('T')[0], label: 'ontem' }
+  }
+
+  // Anteontem
+  if (/\b(anteontem)\b/.test(clean)) {
+    d.setDate(d.getDate() - 2)
+    return { dateStr: d.toISOString().split('T')[0], label: 'anteontem' }
+  }
+
+  // Há N dias / N dias atrás
+  const matchDias = clean.match(/(?:há|a)\s*(\d+)\s*dias?|(\d+)\s*dias?\s*atrás/)
+  if (matchDias) {
+    const num = parseInt(matchDias[1] || matchDias[2], 10)
+    d.setDate(d.getDate() - num)
+    return { dateStr: d.toISOString().split('T')[0], label: `há ${num} dias` }
+  }
+
+  // Semana passada
+  if (clean.includes('semana passada')) {
+    d.setDate(d.getDate() - 7)
+    return { dateStr: d.toISOString().split('T')[0], label: 'semana passada' }
+  }
+
+  // Dias da semana: domingo(0), segunda(1), terça(2), quarta(3), quinta(4), sexta(5), sábado(6)
+  const mapaDias: Record<string, number> = {
+    domingo: 0,
+    segunda: 1,
+    terca: 2,
+    terça: 2,
+    quarta: 3,
+    quinta: 4,
+    sexta: 5,
+    sabado: 6,
+    sábado: 6,
+  }
+
+  for (const [diaNome, targetDay] of Object.entries(mapaDias)) {
+    if (clean.includes(diaNome)) {
+      const currentDay = d.getDay()
+      let diff = currentDay - targetDay
+      if (diff <= 0) diff += 7 // dia mais recente daquela semana para trás
+      d.setDate(d.getDate() - diff)
+      return { dateStr: d.toISOString().split('T')[0], label: `na última ${diaNome}` }
+    }
+  }
+
+  // Data explícita no formato DD/MM ou DD/MM/AAAA
+  const matchData = clean.match(/(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?/)
+  if (matchData) {
+    const dia = parseInt(matchData[1], 10)
+    const mes = parseInt(matchData[2], 10) - 1
+    const ano = matchData[3] ? parseInt(matchData[3], 10) : d.getFullYear()
+    const finalAno = ano < 100 ? 2000 + ano : ano
+    const parsed = new Date(finalAno, mes, dia)
+    if (!isNaN(parsed.getTime())) {
+      const pad = (n: number) => String(n).padStart(2, '0')
+      return {
+        dateStr: `${finalAno}-${pad(mes + 1)}-${pad(dia)}`,
+        label: `${pad(dia)}/${pad(mes + 1)}/${finalAno}`,
+      }
+    }
+  }
+
+  return null
+}
+
 export function calcularMovimentacaoEstoque(
   input: MovimentacaoEstoqueInput,
 ): CalculationResult<MovimentacaoEstoqueOutput> {

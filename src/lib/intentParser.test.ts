@@ -63,4 +63,17 @@ describe('Interpretador Local de Intenções (Português do Brasil)', () => {
     expect(res.intent).toBe('aritmetica_simples')
     expect(res.params.resultado).toBe(15)
   })
+
+  test('Orçamento por voz: Cria um orçamento para fazer uma parede de 20 metros quadrados', () => {
+    const res = parseLocalIntent('Cria um orçamento para fazer uma parede de 20 metros quadrados')
+    expect(res.intent).toBe('iniciar_orcamento_voz')
+    expect(res.params.area).toBe(20)
+    expect(res.params.servico).toBe('parede')
+  })
+
+  test('Consulta diário por voz: O que eu fiz na obra do João ontem?', () => {
+    const res = parseLocalIntent('O que eu fiz na obra do João ontem?')
+    expect(res.intent).toBe('consultar_diario_obra')
+    expect(res.params.dataExpressao).toBe('ontem')
+  })
 })

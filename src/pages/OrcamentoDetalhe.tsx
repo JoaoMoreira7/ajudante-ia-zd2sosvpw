@@ -11,11 +11,14 @@ import {
   Printer,
   Share2,
   ShieldAlert,
+  Receipt,
+  FileCheck,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/contexts/AuthContext'
+import { gerarEImprimirRecibo, gerarEImprimirOrdemServico } from '@/lib/documentGenerator'
 
 export const OrcamentoDetalhe: React.FC = () => {
   const { isOperador } = useAuth()
@@ -115,13 +118,81 @@ export const OrcamentoDetalhe: React.FC = () => {
           </div>
         </div>
 
-        {/* Compartilhar WhatsApp */}
-        <a href={linkWhatsApp} target="_blank" rel="noopener noreferrer">
-          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 text-xs h-10 w-full sm:w-auto">
-            <MessageSquare className="w-4 h-4" />
-            Enviar no WhatsApp
+        {/* Ações e Compartilhar */}
+        <div className="flex flex-wrap items-center gap-2">
+          {orcamento.status === 'aprovado' && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 font-bold text-xs h-10 border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                onClick={() => {
+                  gerarEImprimirRecibo(
+                    {
+                      profissionalNome: 'Profissional da Construção',
+                      clienteNome: cliente?.nome || 'Cliente',
+                      telefone: cliente?.telefone,
+                      obraTitulo: orcamento.titulo,
+                      valor: orcamento.sinal || orcamento.total,
+                      referenteA: `Pagamento ${orcamento.sinal ? 'do sinal' : 'total'} do orçamento aprovado "${orcamento.titulo}"`,
+                    },
+                    orcamento.obra_id || undefined,
+                  )
+                }}
+              >
+                <Receipt className="w-4 h-4" />
+                Recibo
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 font-bold text-xs h-10 border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30"
+                onClick={() => {
+                  gerarEImprimirOrdemServico(
+                    {
+                      profissionalNome: 'Profissional da Construção',
+                      clienteNome: cliente?.nome || 'Cliente',
+                      clienteTelefone: cliente?.telefone,
+                      clienteEndereco: cliente?.endereco,
+                      obraTitulo: orcamento.titulo,
+                      servicosEtapas: (orcamento.itens || []).map((it) => ({
+                        descricao: it.descricao,
+                        quantidade: `${it.quantidade} ${it.unidade}`,
+                        valor: it.total,
+                      })),
+                      valorTotal: orcamento.total,
+                      condicoesPagamento: orcamento.sinal
+                        ? `Sinal de R$ ${orcamento.sinal.toFixed(2)} + ${orcamento.parcelas?.length || 1} parcela(s)`
+                        : 'Conforme orçamento aprovado',
+                      observacoes: orcamento.observacoes || undefined,
+                    },
+                    orcamento.obra_id,
+                  )
+                }}
+              >
+                <FileCheck className="w-4 h-4" />
+                Ordem de serviço
+              </Button>
+            </>
+          )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 font-bold text-xs h-10"
+            onClick={() => window.print()}
+          >
+            <Printer className="w-4 h-4" />
+            Imprimir
           </Button>
-        </a>
+
+          <a href={linkWhatsApp} target="_blank" rel="noopener noreferrer">
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-2 text-xs h-10 w-full sm:w-auto">
+              <MessageSquare className="w-4 h-4" />
+              Enviar no WhatsApp
+            </Button>
+          </a>
+        </div>
       </div>
 
       {/* Ações de Status */}

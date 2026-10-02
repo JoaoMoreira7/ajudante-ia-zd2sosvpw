@@ -24,6 +24,8 @@ import {
   calcularOrcamento,
   calcularResumoFinanceiro,
   calcularMovimentacaoEstoque,
+  gerarEstimativaMateriais,
+  parseRelativeDatePtBr,
 } from './mathEngine'
 
 export function runMathEngineTests(): { passed: number; failed: number; errors: string[] } {
@@ -187,6 +189,31 @@ export function runMathEngineTests(): { passed: number; failed: number; errors: 
   })
   assert(resEstoqueAdd.valor.novaQuantidade === 25, '10 + 15 deve ser 25')
   assert(resEstoqueAdd.valor.estaAcabando === false, '25 > 12 não está acabando')
+
+  // 11. Teste de Estimativa de Materiais rotulado
+  const resEstParede = gerarEstimativaMateriais('alvenaria', 50, 10)
+  assert(resEstParede.tipo === 'ESTIMATIVA', 'Deve ser ESTIMATIVA')
+  assert(resEstParede.valor.itens.length >= 3, 'Deve conter blocos, cimento e areia')
+  assert(
+    resEstParede.valor.avisoLegal.includes('ESTIMATIVA — não substitui projeto'),
+    'Deve conter aviso legal obrigatório',
+  )
+  const itemBloco = resEstParede.valor.itens.find((i) => i.nome.includes('Bloco'))
+  assert(itemBloco !== undefined && itemBloco.quantidade > 0, 'Quantidade de blocos deve ser > 0')
+
+  // 12. Teste do parser de datas relativas em pt-BR
+  const baseFake = new Date('2025-02-20T12:00:00Z') // uma quinta-feira
+  const dHoje = parseRelativeDatePtBr('hoje', baseFake)
+  assert(dHoje?.dateStr === '2025-02-20', 'hoje deve ser 2025-02-20')
+
+  const dOntem = parseRelativeDatePtBr('ontem', baseFake)
+  assert(dOntem?.dateStr === '2025-02-19', 'ontem deve ser 2025-02-19')
+
+  const dAnteontem = parseRelativeDatePtBr('anteontem', baseFake)
+  assert(dAnteontem?.dateStr === '2025-02-18', 'anteontem deve ser 2025-02-18')
+
+  const dHa3Dias = parseRelativeDatePtBr('fiz isso há 3 dias', baseFake)
+  assert(dHa3Dias?.dateStr === '2025-02-17', 'há 3 dias deve ser 2025-02-17')
 
   return { passed, failed, errors }
 }

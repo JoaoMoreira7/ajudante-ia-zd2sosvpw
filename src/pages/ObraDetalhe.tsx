@@ -19,6 +19,8 @@ import {
   Trash2,
   FileText,
   Navigation,
+  Receipt,
+  FileCheck,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,19 +31,34 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { gerarEImprimirRecibo, gerarEImprimirOrdemServico } from '@/lib/documentGenerator'
 
 export const ObraDetalhe: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const { isDono, config } = useAuth()
   const [obra, setObra] = useState<Obra | null>(null)
+  const [clienteObra, setClienteObra] = useState<any>(null)
   const [diarios, setDiarios] = useState<DiarioObra[]>([])
   const [fotos, setFotos] = useState<DocumentoObra[]>([])
   const [dialogDiarioAberto, setDialogDiarioAberto] = useState(false)
   const [dialogFotoAberto, setDialogFotoAberto] = useState(false)
   const [capturandoGeo, setCapturandoGeo] = useState(false)
+
+  // Modais de Recibo e Ordem de Serviço
+  const [modalReciboOpen, setModalReciboOpen] = useState(false)
+  const [reciboValor, setReciboValor] = useState('')
+  const [reciboReferente, setReciboReferente] = useState('')
+  const [reciboObs, setReciboObs] = useState('')
+
+  const [modalOsOpen, setModalOsOpen] = useState(false)
+  const [osPrevisao, setOsPrevisao] = useState('')
+  const [osValor, setOsValor] = useState('')
+  const [osObs, setOsObs] = useState('')
 
   // Novo lançamento de diário de obra
   const [servico, setServico] = useState('')
@@ -60,6 +77,10 @@ export const ObraDetalhe: React.FC = () => {
     if (!id) return
     const ob = await localDB.getById('obras', id)
     setObra(ob)
+    if (ob?.cliente_id) {
+      const cli = await localDB.getById('clientes', ob.cliente_id)
+      setClienteObra(cli)
+    }
     const todosDiarios = await localDB.getAll('diario_obra')
     setDiarios(todosDiarios.filter((d) => d.obra_id === id))
     const todosDocs = await localDB.getAll('documentos')
@@ -271,6 +292,65 @@ export const ObraDetalhe: React.FC = () => {
     window.print()
   }
 
+  const handleGerarRecibo = async () => {
+    const val =
+      parseFloat(reciboValor.replace(',', '.')) || obra.valor_recebido || obra.valor_contratado || 0
+    await gerarEImprimirRecibo(
+      {
+        profissionalNome: config.nome_profissional || 'Profissional da Construção',
+        empresaNome: config.nome_empresa || undefined,
+        telefone: clienteObra?.telefone || undefined,
+        clienteNome: clienteObra?.nome || 'Cliente',
+        obraTitulo: obra.titulo,
+        valor: val,
+        referenteA: reciboReferente || `Serviços na obra ${obra.titulo}`,
+        observacoes: reciboObs || undefined,
+      },
+      obra.id,
+    )
+    setModalReciboOpen(false)
+    setReciboValor('')
+    setReciboReferente('')
+    setReciboObs('')
+  }
+
+  const handleGerarOS = async () => {
+    const val = parseFloat(osValor.replace(',', '.')) || obra.valor_contratado || 0
+    const servicosEtapas = (obra.etapas || []).map((et) => ({
+      descricao: et.nome,
+      quantidade: et.concluida || et.concluido ? 'Concluída' : `${et.progresso || 0}%`,
+      valor: undefined,
+    }))
+
+    if (servicosEtapas.length === 0) {
+      servicosEtapas.push({
+        descricao: 'Serviços de construção civil / reforma',
+        quantidade: 'Global',
+        valor: val,
+      })
+    }
+
+    await gerarEImprimirOrdemServico(
+      {
+        profissionalNome: config.nome_profissional || 'Profissional da Construção',
+        empresaNome: config.nome_empresa || undefined,
+        telefone: clienteObra?.telefone || undefined,
+        clienteNome: clienteObra?.nome || 'Cliente',
+        obraTitulo: obra.titulo,
+        obraEndereco: obra.endereco || undefined,
+        previsaoTermino: osPrevisao || (obra.previsao_termino ? new Date(obra.previsao_termino).toLocaleDateString('pt-BR') : 'A combinar'),
+        servicosEtapas,
+        valorTotal: val,
+        observacoes: osObs || undefined,
+      },
+      obra.id,
+    )
+    setModalOsOpen(false)
+    setOsPrevisao('')
+    setOsValor('')
+    setOsObs('')
+  }
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Cabeçalho */}
@@ -292,6 +372,39 @@ export const ObraDetalhe: React.FC = () => {
 
         {/* Botões de Ação Rápida no Topo da Obra */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Botão Recibo */}
+          <Button
+            variant="outline"
+            onClick={() => {
+              setReciboValor(
+                obra.valor_recebido
+                  ? String(obra.valor_recebido)
+                  : obra.valor_contratado
+                    ? String(obra.valor_contratado)
+                    : '',
+              )
+              setReciboReferente(`Serviços executados na obra ${obra.titulo}`)
+              setModalReciboOpen(true)
+            }}
+            className="font-bold text-xs gap-1.5 h-9 rounded-xl border-amber-300 dark:border-amber-800 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+          >
+            <Receipt className="w-4 h-4" />
+            Recibo
+          </Button>
+
+          {/* Botão Ordem de Serviço */}
+          <Button
+            variant="outline"
+            onClick={() => {
+              setOsValor(obra.valor_contratado ? String(obra.valor_contratado) : '')
+              setModalOsOpen(true)
+            }}
+            className="font-bold text-xs gap-1.5 h-9 rounded-xl border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/30"
+          >
+            <FileCheck className="w-4 h-4" />
+            Ordem de serviço
+          </Button>
+
           {/* Botão Câmera Rápida (capture="environment") */}
           <label className="cursor-pointer">
             <input
@@ -522,6 +635,124 @@ export const ObraDetalhe: React.FC = () => {
               Salvar Registro Fotográfico
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIÁLOGO / MODAL DE RECIBO */}
+      <Dialog open={modalReciboOpen} onOpenChange={setModalReciboOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Receipt className="w-5 h-5 text-amber-600" />
+              Gerar Recibo de Pagamento
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div>
+              <Label>Cliente</Label>
+              <Input value={clienteObra?.nome || 'Cliente da Obra'} disabled />
+            </div>
+            <div>
+              <Label>Valor Recebido (R$) *</Label>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Ex: 1500.00"
+                value={reciboValor}
+                onChange={(e) => setReciboValor(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Referente a *</Label>
+              <Input
+                placeholder="Ex: Execução de alvenaria e reboco"
+                value={reciboReferente}
+                onChange={(e) => setReciboReferente(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Observações (opcional)</Label>
+              <Textarea
+                placeholder="Ex: Pago via PIX"
+                value={reciboObs}
+                onChange={(e) => setReciboObs(e.target.value)}
+                rows={2}
+              />
+            </div>
+            <DialogFooter className="mt-4 gap-2">
+              <Button variant="outline" onClick={() => setModalReciboOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleGerarRecibo}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold"
+              >
+                <Printer className="w-4 h-4 mr-1.5" />
+                Imprimir Recibo (PDF)
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIÁLOGO / MODAL DE ORDEM DE SERVIÇO */}
+      <Dialog open={modalOsOpen} onOpenChange={setModalOsOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <FileCheck className="w-5 h-5 text-sky-600" />
+              Gerar Ordem de Serviço
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <div>
+              <Label>Obra</Label>
+              <Input value={obra.titulo} disabled />
+            </div>
+            <div>
+              <Label>Cliente</Label>
+              <Input value={clienteObra?.nome || 'Cliente da Obra'} disabled />
+            </div>
+            <div>
+              <Label>Valor Total da O.S. (R$)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Ex: 5000.00"
+                value={osValor}
+                onChange={(e) => setOsValor(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Previsão de Término</Label>
+              <Input
+                placeholder="Ex: 30 dias ou 20/03/2025"
+                value={osPrevisao}
+                onChange={(e) => setOsPrevisao(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Observações / Condições</Label>
+              <Textarea
+                placeholder="Ex: Pagamento na conclusão de cada etapa"
+                value={osObs}
+                onChange={(e) => setOsObs(e.target.value)}
+                rows={2}
+              />
+            </div>
+            <DialogFooter className="mt-4 gap-2">
+              <Button variant="outline" onClick={() => setModalOsOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleGerarOS}
+                className="bg-sky-600 hover:bg-sky-700 text-white font-bold"
+              >
+                <Printer className="w-4 h-4 mr-1.5" />
+                Imprimir O.S. (PDF)
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

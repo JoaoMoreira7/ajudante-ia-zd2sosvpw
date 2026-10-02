@@ -32,6 +32,17 @@ export interface ChatInteraction {
   timestamp: number
 }
 
+export interface DialogoOrcamentoVoz {
+  etapa: 'aguardando_preco_m2' | 'aguardando_materiais' | 'aguardando_sinal' | 'aguardando_parcelas'
+  servico: string
+  area: number
+  precoM2?: number
+  acrescentarMateriais?: boolean
+  sinal?: number
+  numeroParcelas?: number
+  orcamentoGeradoId?: string
+}
+
 export interface ConversationContextData {
   comprimento?: number
   largura?: number
@@ -42,7 +53,11 @@ export interface ConversationContextData {
   perdaPct?: number
   ultimoAssunto?: string
   clienteId?: string
+  clienteNome?: string
   obraId?: string
+  fluxoAtivo?: 'orcamento' | 'estoque'
+  dialogoOrcamento?: DialogoOrcamentoVoz
+  ultimoCalculoMateriais?: MathEngine.ListaMateriaisEstimativa
 }
 
 interface VoiceContextType {
@@ -88,7 +103,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [statusText, setStatusText] = useState('Pronto')
   const [currentPendingConfirm, setCurrentPendingConfirm] = useState<ChatInteraction | null>(null)
 
-  // Empilhar ação reversível
+  // Empilhar ação reversível local por dispositivo
   const pushUndo = useCallback((action: ReversibleAction) => {
     setUndoStack((prev) => [action, ...prev.slice(0, 19)])
   }, [])
@@ -163,14 +178,308 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
-      // 1. Interpretação Local Primeiro ou enriquecida pelo agente
+      // 1. SE HOUVER FLUXO DE ORÇAMENTO ATIVO, INTERCEPTA PASSOS DO DIÁLOGO GUIADO
+      if (contextData.fluxoAtivo === 'orcamento' && contextData.dialogoOrcamento) {
+        const dlg = contextData.dialogoOrcamento
+        const lower = text.toLowerCase().trim()
+
+        // Comando CANCELA aborta sem salvar
+        if (lower === 'cancela' || lower === 'cancelar' || lower === 'abortar') {
+          setContextData((prev) => ({
+            ...prev,
+            fluxoAtivo: undefined,
+            dialogoOrcamento: undefined,
+          }))
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'resp_' + Date.now(),
+              autor: 'ajudante',
+              texto: 'Orçamento cancelado sem salvar.',
+              timestamp: Date.now(),
+            },
+          ])
+          return
+        }
+
+        // ETAPA 1: AGUARDANDO PREÇO DA MÃO DE OBRA POR M²
+        if (dlg.etapa === 'aguardando_preco_m2') {
+          // Extrai número da resposta em linguagem natural ("cinquenta reais", "50 reais o metro", "55", etc)
+          const numMatch = lower.match(/(\d+[.,]?\d*)/)
+          let preco = numMatch ? parseFloat(numMatch[1].replace(',', '.')) : null
+          if (!preco) {
+            // Conversão de números comuns falados por extenso
+            if (lower.includes('cinquenta')) preco = 50
+            else if (lower.includes('quarenta')) preco = 40
+            else if (lower.includes('sessenta')) preco = 60
+            else if (lower.includes('trinta')) preco = 30
+            else if (lower.includes('setenta')) preco = 70
+            else if (lower.includes('oitenta')) preco = 80
+            else if (lower.includes('cem')) preco = 100
+          }
+
+          if (!preco || preco <= 0) {
+            setInteractions((prev) => [
+              ...prev,
+              {
+                id: 'resp_' + Date.now(),
+                autor: 'ajudante',
+                texto:
+                  'Não entendi o valor. Qual o preço da mão de obra por metro quadrado? (Ex: 50 reais)',
+                timestamp: Date.now(),
+              },
+            ])
+            return
+          }
+
+          // Atualiza etapa para perguntar sobre materiais
+          setContextData((prev) => ({
+            ...prev,
+            dialogoOrcamento: {
+              ...dlg,
+              precoM2: preco,
+              etapa: 'aguardando_materiais',
+            },
+          }))
+
+          const totalMaoObra = dlg.area * preco
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'resp_' + Date.now(),
+              autor: 'ajudante',
+              texto: `Entendido: R$ ${preco.toFixed(2)} por m² (${dlg.area} m² = R$ ${totalMaoObra.toFixed(2)} de mão de obra).\n\nDeseja acrescentar materiais na estimativa? (Responda "Sim" ou "Não")`,
+              timestamp: Date.now(),
+              detalhes: {
+                sugestoes: ['Sim, acrescentar materiais', 'Não, só mão de obra', 'Cancela'],
+              },
+            },
+          ])
+          return
+        }
+
+        // ETAPA 2: AGUARDANDO ADICIONAR MATERIAIS
+        if (dlg.etapa === 'aguardando_materiais') {
+          const querMateriais =
+            lower.includes('sim') ||
+            lower.includes('claro') ||
+            lower.includes('pode') ||
+            lower.includes('acrescenta') ||
+            lower.includes('com material')
+
+          setContextData((prev) => ({
+            ...prev,
+            dialogoOrcamento: {
+              ...dlg,
+              acrescentarMateriais: querMateriais,
+              etapa: 'aguardando_sinal',
+            },
+          }))
+
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'resp_' + Date.now(),
+              autor: 'ajudante',
+              texto: querMateriais
+                ? 'Materiais incluídos na estimativa! Deseja definir um sinal de entrada? Diga o valor (ex: "sinal de 1000 reais") ou responda "Sem sinal".'
+                : 'Certo, somente mão de obra. Deseja definir um sinal de entrada? Diga o valor ou "Sem sinal".',
+              timestamp: Date.now(),
+              detalhes: {
+                sugestoes: ['Sem sinal', 'Sinal de 500 reais', 'Sinal de 1000 reais', 'Cancela'],
+              },
+            },
+          ])
+          return
+        }
+
+        // ETAPA 3: AGUARDANDO SINAL
+        if (dlg.etapa === 'aguardando_sinal') {
+          let sinalValor = 0
+          if (!lower.includes('sem') && !lower.includes('não') && !lower.includes('nao')) {
+            const numMatch = lower.match(/(\d+[.,]?\d*)/)
+            if (numMatch) {
+              sinalValor = parseFloat(numMatch[1].replace(',', '.'))
+            }
+          }
+
+          setContextData((prev) => ({
+            ...prev,
+            dialogoOrcamento: {
+              ...dlg,
+              sinal: sinalValor,
+              etapa: 'aguardando_parcelas',
+            },
+          }))
+
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'resp_' + Date.now(),
+              autor: 'ajudante',
+              texto: `Sinal: R$ ${sinalValor.toFixed(2)}. Em quantas parcelas deseja dividir o saldo restante? (Ex: 1 vez, 2 vezes, 3 parcelas)`,
+              timestamp: Date.now(),
+              detalhes: {
+                sugestoes: ['À vista (1x)', '2 parcelas', '3 parcelas', 'Cancela'],
+              },
+            },
+          ])
+          return
+        }
+
+        // ETAPA 4: AGUARDANDO NÚMERO DE PARCELAS -> FINALIZAÇÃO E SALVAMENTO
+        if (dlg.etapa === 'aguardando_parcelas') {
+          const numMatch = lower.match(/(\d+)/)
+          let parcelasCount = numMatch ? parseInt(numMatch[1], 10) : 1
+          if (lower.includes('duas') || lower.includes('dois')) parcelasCount = 2
+          if (lower.includes('tres') || lower.includes('três')) parcelasCount = 3
+          if (parcelasCount < 1) parcelasCount = 1
+
+          // Monta itens determinísticos
+          const itensOrc: Array<{
+            descricao: string
+            quantidade: number
+            unidade: string
+            preco_unitario: number
+            total: number
+            categoria: string
+          }> = []
+
+          // Mão de obra calculada determinística
+          const precoUnitarioMaoObra = dlg.precoM2 || 50
+          const totalMaoObra = dlg.area * precoUnitarioMaoObra
+          itensOrc.push({
+            descricao: `Mão de obra para ${dlg.servico} (${dlg.area} m²)`,
+            quantidade: dlg.area,
+            unidade: 'm²',
+            preco_unitario: precoUnitarioMaoObra,
+            total: totalMaoObra,
+            categoria: 'mão de obra',
+          })
+
+          // Se escolheu materiais, usa o motor determinístico
+          if (dlg.acrescentarMateriais) {
+            const servicoTipo = dlg.servico.includes('piso')
+              ? 'piso'
+              : dlg.servico.includes('reboco')
+                ? 'reboco'
+                : dlg.servico.includes('pintura')
+                  ? 'pintura'
+                  : 'alvenaria'
+            const est = MathEngine.gerarEstimativaMateriais(servicoTipo, dlg.area, 10)
+            est.valor.itens.forEach((mat) => {
+              // Preço estimado médio por item de material
+              let precoMat = 38.0
+              if (mat.nome.includes('Bloco')) precoMat = 2.8
+              else if (mat.nome.includes('Areia')) precoMat = 140.0
+              else if (mat.nome.includes('Cal')) precoMat = 18.0
+              else if (mat.nome.includes('Piso')) precoMat = 45.0
+              else if (mat.nome.includes('Tinta')) precoMat = 260.0
+
+              itensOrc.push({
+                descricao: `${mat.nome} (estimativa)`,
+                quantidade: mat.quantidade,
+                unidade: mat.unidade,
+                preco_unitario: precoMat,
+                total: Number((mat.quantidade * precoMat).toFixed(2)),
+                categoria: 'materiais',
+              })
+            })
+          }
+
+          // Cálculo determinístico final
+          const calcFinal = MathEngine.calcularOrcamento(
+            itensOrc.map((it) => ({
+              descricao: it.descricao,
+              quantidade: it.quantidade,
+              unidade: it.unidade,
+              precoUnitario: it.preco_unitario,
+              categoria: it.categoria as any,
+            })),
+            {
+              sinal: dlg.sinal || 0,
+              numeroParcelas: parcelasCount,
+            },
+          )
+
+          // Salva no banco local com Last-Write-Wins / SyncQueue
+          const novoOrcamentoId = 'orc_' + Date.now()
+          const orcSalvo = {
+            id: novoOrcamentoId,
+            owner_id: pb.authStore.model?.id || 'local_user',
+            cliente_id: contextData.clienteId,
+            titulo: `Orçamento de ${dlg.servico.toUpperCase()} (${dlg.area} m²)`,
+            itens: itensOrc,
+            subtotal: calcFinal.valor.subtotal,
+            desconto: 0,
+            total: calcFinal.valor.total,
+            status: 'criado' as const,
+            sinal: dlg.sinal || 0,
+            parcelas: calcFinal.valor.parcelas.map((p) => ({
+              numero: p.numero,
+              valor: p.valor,
+              vencimento: new Date(Date.now() + p.numero * 30 * 86400000)
+                .toISOString()
+                .split('T')[0],
+              status: 'pendente' as const,
+            })),
+            observacoes: 'Orçamento gerado por comando de voz com motor determinístico.',
+            created: new Date().toISOString(),
+          }
+
+          await mutateEntity('orcamentos', 'create', orcSalvo)
+
+          // Adiciona ação reversível à pilha de desfazer
+          pushUndo({
+            id: 'undo_' + Date.now(),
+            descricao: `Criação do Orçamento "${orcSalvo.titulo}"`,
+            timestamp: Date.now(),
+            desfazer: async () => {
+              await mutateEntity('orcamentos', 'delete', { id: novoOrcamentoId })
+            },
+          })
+
+          // Limpa diálogo
+          setContextData((prev) => ({
+            ...prev,
+            fluxoAtivo: undefined,
+            dialogoOrcamento: undefined,
+          }))
+
+          const parcelasText =
+            parcelasCount > 1
+              ? `${parcelasCount} parcelas de R$ ${calcFinal.valor.parcelas[0]?.valor.toFixed(2)}`
+              : 'À vista'
+
+          const whatsLink = `https://api.whatsapp.com/send?text=${encodeURIComponent(
+            `*ORÇAMENTO: ${orcSalvo.titulo}*\nTotal: R$ ${calcFinal.valor.total.toFixed(2)}\nSinal: R$ ${(dlg.sinal || 0).toFixed(2)}\nCondições: ${parcelasText}\n\nJC Construções`,
+          )}`
+
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'resp_' + Date.now(),
+              autor: 'ajudante',
+              texto: `ORÇAMENTO CRIADO COM SUCESSO!\n\n• Serviço: ${dlg.servico} (${dlg.area} m²)\n• Mão de obra: R$ ${totalMaoObra.toFixed(2)}\n• Materiais: ${dlg.acrescentarMateriais ? 'Incluídos' : 'Não incluídos'}\n• TOTAL: R$ ${calcFinal.valor.total.toFixed(2)}\n• Sinal: R$ ${(dlg.sinal || 0).toFixed(2)}\n• Pagamento: ${parcelasText}\n\nDeseja compartilhar com o cliente?`,
+              tipoCalculo: 'EXATO',
+              timestamp: Date.now(),
+              detalhes: {
+                sugestoes: ['Manda para o cliente', 'Ver orçamentos', 'Desfaz'],
+              },
+            },
+          ])
+          return
+        }
+      }
+
+      // 2. Interpretação Local Primeiro ou enriquecida pelo agente
       const parsed: ParsedIntent = parseLocalIntent(text, contextData)
       if (skipAgentIntent?.intent && parsed.confidence < 0.8) {
         parsed.intent = skipAgentIntent.intent
         parsed.params = { ...skipAgentIntent, ...parsed.params }
       }
 
-      // 2. Se for comando de DESFAZER
+      // 3. Se for comando de DESFAZER
       if (parsed.intent === 'acao_desfazer') {
         const msgDesfazer = await undoLastAction()
         setInteractions((prev) => [
@@ -180,6 +489,215 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             autor: 'ajudante',
             texto: msgDesfazer,
             timestamp: Date.now(),
+          },
+        ])
+        return
+      }
+
+      // 4. Se for INICIAR ORÇAMENTO POR VOZ
+      if (parsed.intent === 'iniciar_orcamento_voz') {
+        const area = parsed.params.area || contextData.areaLiquida || contextData.areaBruta || 20
+        const servico = parsed.params.servico || 'parede'
+
+        setContextData((prev) => ({
+          ...prev,
+          fluxoAtivo: 'orcamento',
+          dialogoOrcamento: {
+            etapa: 'aguardando_preco_m2',
+            servico,
+            area,
+          },
+        }))
+
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'resp_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Iniciando orçamento para ${servico} de ${area} m².\n\nQual o preço da mão de obra por metro quadrado?`,
+            tipoCalculo: 'EXATO',
+            timestamp: Date.now(),
+            detalhes: {
+              sugestoes: ['50 reais o metro', '60 reais', '45 reais', 'Cancela'],
+            },
+          },
+        ])
+        return
+      }
+
+      // 5. Se for CONSULTA DE DIÁRIO DE OBRA POR VOZ ("O que eu fiz na obra do João ontem?")
+      if (parsed.intent === 'consultar_diario_obra') {
+        const { termoObra, dataExpressao } = parsed.params
+        const parseData = MathEngine.parseRelativeDatePtBr(dataExpressao || 'hoje')
+        const dataAlvoStr = parseData?.dateStr || new Date().toISOString().split('T')[0]
+        const dataRotulo = parseData?.label || dataExpressao || 'na data solicitada'
+
+        const todasObras = await localDB.getAll('obras')
+        let obraEncontrada = todasObras.find(
+          (o) =>
+            termoObra &&
+            (o.titulo.toLowerCase().includes(termoObra.toLowerCase()) ||
+              (o.endereco && o.endereco.toLowerCase().includes(termoObra.toLowerCase()))),
+        )
+
+        // Se não encontrou pelo título, procura por cliente
+        if (!obraEncontrada && termoObra) {
+          const todosClientes = await localDB.getAll('clientes')
+          const cliente = todosClientes.find((c) =>
+            c.nome.toLowerCase().includes(termoObra.toLowerCase()),
+          )
+          if (cliente) {
+            obraEncontrada = todasObras.find((o) => o.cliente_id === cliente.id)
+          }
+        }
+
+        const todosDiarios = await localDB.getAll('diario_obra')
+        let filtrados = todosDiarios.filter((d) => d.data.startsWith(dataAlvoStr))
+        if (obraEncontrada) {
+          filtrados = filtrados.filter((d) => d.obra_id === obraEncontrada?.id)
+        }
+
+        if (filtrados.length === 0) {
+          const nomeObraTexto = obraEncontrada ? ` na obra "${obraEncontrada.titulo}"` : ''
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'resp_' + Date.now(),
+              autor: 'ajudante',
+              texto: `Não encontrei anotações no diário ${dataRotulo}${nomeObraTexto}.`,
+              timestamp: Date.now(),
+              detalhes: {
+                sugestoes: ['Ver minhas obras', 'Hoje fizemos 20m² de reboco', 'O que fiz hoje?'],
+              },
+            },
+          ])
+          return
+        }
+
+        const linhas = filtrados
+          .map(
+            (d) =>
+              `• ${d.servico}${d.quantidade ? ` (${d.quantidade} m²)` : ''}${d.material ? ` — Usou: ${d.material}` : ''}${d.observacoes ? ` — Obs: "${d.observacoes}"` : ''}`,
+          )
+          .join('\n')
+
+        const nomeObraTexto = obraEncontrada ? ` na obra "${obraEncontrada.titulo}"` : ''
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'resp_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Registros de ${dataRotulo}${nomeObraTexto}:\n\n${linhas}`,
+            tipoCalculo: 'EXATO',
+            timestamp: Date.now(),
+            detalhes: {
+              sugestoes: ['Mostra minhas obras', 'Faz um novo diário'],
+            },
+          },
+        ])
+        return
+      }
+
+      // 6. Se for LISTA DE COMPRAS POR VOZ
+      if (parsed.intent === 'estoque_lista_compras' || parsed.intent === 'gerar_lista_compras') {
+        const todosMats = await localDB.getAll('materiais_estoque')
+        const acabando = todosMats.filter(
+          (m) => m.estoque_minimo !== undefined && m.quantidade <= m.estoque_minimo,
+        )
+
+        let textoLista = ''
+        if (acabando.length === 0) {
+          textoLista = 'Nenhum material está com estoque crítico no depósito no momento.'
+        } else {
+          textoLista =
+            `LISTA DE COMPRAS (Itens abaixo do estoque mínimo):\n` +
+            acabando
+              .map(
+                (m) =>
+                  `• ${m.nome}: restam ${m.quantidade} ${m.unidade} (Mínimo: ${m.estoque_minimo} ${m.unidade})`,
+              )
+              .join('\n')
+        }
+
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'resp_' + Date.now(),
+            autor: 'ajudante',
+            texto: textoLista,
+            tipoCalculo: 'EXATO',
+            timestamp: Date.now(),
+            detalhes: {
+              sugestoes: [
+                'Manda para o cliente',
+                'Tenho 20 sacos de cimento',
+                'O que está acabando?',
+              ],
+            },
+          },
+        ])
+        return
+      }
+
+      // 7. Se for BAIXAR ESTOQUE COM VERIFICAÇÃO DE ZERO
+      if (parsed.intent === 'estoque_baixar') {
+        const matNome = parsed.params.material || ''
+        const qtdBaixa = parsed.params.quantidade || 1
+        const todosMats = await localDB.getAll('materiais_estoque')
+        const encontrado = todosMats.find((m) =>
+          m.nome.toLowerCase().includes(matNome.toLowerCase()),
+        )
+
+        if (!encontrado) {
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'resp_' + Date.now(),
+              autor: 'ajudante',
+              texto: `Não encontrei "${matNome}" no seu estoque. Deseja cadastrar esse material?`,
+              timestamp: Date.now(),
+              detalhes: {
+                sugestoes: [`Tenho 10 sacos de ${matNome}`, 'Ver estoque de materiais', 'Cancela'],
+              },
+            },
+          ])
+          return
+        }
+
+        const novaQtd = Math.max(0, encontrado.quantidade - qtdBaixa)
+        const qtdAnterior = encontrado.quantidade
+
+        const executeBaixa = async () => {
+          await mutateEntity('materiais_estoque', 'update', {
+            ...encontrado,
+            quantidade: novaQtd,
+          })
+          pushUndo({
+            id: 'undo_' + Date.now(),
+            descricao: `Baixa de ${qtdBaixa} ${encontrado.unidade} de ${encontrado.nome}`,
+            timestamp: Date.now(),
+            desfazer: async () => {
+              await mutateEntity('materiais_estoque', 'update', {
+                ...encontrado,
+                quantidade: qtdAnterior,
+              })
+            },
+          })
+        }
+
+        await executeBaixa()
+
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'resp_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Baixa realizada: -${qtdBaixa} ${encontrado.unidade} de ${encontrado.nome}. Estoque atual: ${novaQtd} ${encontrado.unidade}.${novaQtd <= (encontrado.estoque_minimo || 0) ? ' ⚠️ Atenção: estoque baixo!' : ''}`,
+            tipoCalculo: 'EXATO',
+            timestamp: Date.now(),
+            detalhes: {
+              sugestoes: ['Desfaz', 'O que está acabando?', 'Faz uma lista de compras'],
+            },
           },
         ])
         return
@@ -293,7 +811,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           'Seu perfil de acesso é Operador. O registro de pagamentos e entradas financeiras é restrito ao Dono da obra.'
         tipoBadge = 'EXATO'
       } else if (parsed.intent === 'registrar_saida') {
-        // OPERAÇÃO FINANCEIRA COM CONFIRMAÇÃO OBRIGATÓRIA
+        // OPERAÇÃO FINANCEIRA: CONFIRMAÇÃO OBRIGATÓRIA SE >= R$ 1.000 OU EXCLUSÕES
         const val = parsed.params.valor
         const cat = parsed.params.categoria
         const desc = parsed.params.descricao
@@ -319,21 +837,28 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           })
         }
 
-        const confirmMsg: ChatInteraction = {
-          id: 'confirm_' + Date.now(),
-          autor: 'ajudante',
-          texto: `Você deseja registrar uma saída de R$ ${val.toFixed(2)} (${cat} - ${desc})?`,
-          timestamp: Date.now(),
-          detalhes: {
-            confirmacaoNecessaria: true,
-            acaoPendente: executeSaida,
-          },
+        if (val >= 1000) {
+          const confirmMsg: ChatInteraction = {
+            id: 'confirm_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Você deseja registrar uma saída de R$ ${val.toFixed(2)} (${cat} - ${desc})?`,
+            timestamp: Date.now(),
+            detalhes: {
+              confirmacaoNecessaria: true,
+              acaoPendente: executeSaida,
+            },
+          }
+          setCurrentPendingConfirm(confirmMsg)
+          setInteractions((prev) => [...prev, confirmMsg])
+          return
+        } else {
+          await executeSaida()
+          respostaTexto = `Registrada saída de R$ ${val.toFixed(2)} (${desc}).`
+          tipoBadge = 'EXATO'
+          sugestoes = ['Desfaz', 'Consultar saldo', 'Registrar outra saída']
         }
-        setCurrentPendingConfirm(confirmMsg)
-        setInteractions((prev) => [...prev, confirmMsg])
-        return
       } else if (parsed.intent === 'registrar_entrada') {
-        // ENTRADA FINANCEIRA COM CONFIRMAÇÃO
+        // ENTRADA FINANCEIRA COM CONFIRMAÇÃO SE >= R$ 1.000
         const val = parsed.params.valor
         const desc = parsed.params.descricao
 
@@ -358,33 +883,77 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           })
         }
 
-        const confirmMsg: ChatInteraction = {
-          id: 'confirm_' + Date.now(),
-          autor: 'ajudante',
-          texto: `Você deseja registrar um recebimento de R$ ${val.toFixed(2)} (${desc})?`,
-          timestamp: Date.now(),
-          detalhes: {
-            confirmacaoNecessaria: true,
-            acaoPendente: executeEntrada,
-          },
+        if (val >= 1000) {
+          const confirmMsg: ChatInteraction = {
+            id: 'confirm_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Você deseja registrar um recebimento de R$ ${val.toFixed(2)} (${desc})?`,
+            timestamp: Date.now(),
+            detalhes: {
+              confirmacaoNecessaria: true,
+              acaoPendente: executeEntrada,
+            },
+          }
+          setCurrentPendingConfirm(confirmMsg)
+          setInteractions((prev) => [...prev, confirmMsg])
+          return
+        } else {
+          await executeEntrada()
+          respostaTexto = `Registrado recebimento de R$ ${val.toFixed(2)} (${desc}).`
+          tipoBadge = 'EXATO'
+          sugestoes = ['Desfaz', 'Consultar saldo']
         }
-        setCurrentPendingConfirm(confirmMsg)
-        setInteractions((prev) => [...prev, confirmMsg])
-        return
       } else if (parsed.intent === 'estoque_adicionar') {
         const qtd = parsed.params.quantidade
         const mat = parsed.params.material
         const un = parsed.params.unidade || 'saco'
-        const item = await localDB.put('materiais_estoque', {
-          id: 'mat_' + Date.now(),
-          owner_id: 'local_user',
-          nome: mat,
-          quantidade: qtd,
-          unidade: un as any,
-          estoque_minimo: 5,
-        })
+
+        // Verifica se já existe o material para somar ou criar
+        const todosMats = await localDB.getAll('materiais_estoque')
+        const existente = todosMats.find((m) => m.nome.toLowerCase().includes(mat.toLowerCase()))
+
+        let novoId = ''
+        if (existente) {
+          novoId = existente.id
+          const qtdAnterior = existente.quantidade
+          await mutateEntity('materiais_estoque', 'update', {
+            ...existente,
+            quantidade: existente.quantidade + qtd,
+          })
+          pushUndo({
+            id: 'undo_' + Date.now(),
+            descricao: `Adição de ${qtd} ${un} de ${existente.nome}`,
+            timestamp: Date.now(),
+            desfazer: async () => {
+              await mutateEntity('materiais_estoque', 'update', {
+                ...existente,
+                quantidade: qtdAnterior,
+              })
+            },
+          })
+        } else {
+          novoId = 'mat_' + Date.now()
+          await mutateEntity('materiais_estoque', 'create', {
+            id: novoId,
+            owner_id: pb.authStore.model?.id || 'local_user',
+            nome: mat,
+            quantidade: qtd,
+            unidade: un as any,
+            estoque_minimo: 5,
+          })
+          pushUndo({
+            id: 'undo_' + Date.now(),
+            descricao: `Cadastro de ${mat} (${qtd} ${un})`,
+            timestamp: Date.now(),
+            desfazer: async () => {
+              await mutateEntity('materiais_estoque', 'delete', { id: novoId })
+            },
+          })
+        }
+
         respostaTexto = `Registrado no estoque: ${qtd} ${un}(s) de ${mat}.`
         tipoBadge = 'EXATO'
+        sugestoes = ['Desfaz', 'O que está acabando?', 'Faz uma lista de compras']
       } else if (parsed.intent === 'estoque_consultar_acabando') {
         const mats = await localDB.getAll('materiais_estoque')
         const acabando = mats.filter((m) => m.estoque_minimo && m.quantidade <= m.estoque_minimo)
