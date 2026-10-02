@@ -205,7 +205,7 @@ export function parseLocalIntent(text: string, context?: Record<string, any>): P
 
   // 11. CONSULTA DE SALDO OU FINANCEIRO
   if (
-    /\b(quanto falta receber|quanto vou receber|qual meu saldo|quanto tenho de saldo|quanto lucrei)\b/.test(
+    /\b(quanto falta receber|quanto vou receber|qual meu saldo|quanto tenho de saldo|quanto lucrei|quanto eu gastei|quanto gastei|qual o custo|quanto custou)\b/.test(
       clean,
     )
   ) {

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { localDB } from '@/lib/localDB'
 import { Obra, Cliente } from '@/types/database'
 import { HardHat, Plus, MapPin, Calendar, CheckCircle2, TrendingUp } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 export const Obras: React.FC = () => {
+  const { isDono, isOperador } = useAuth()
   const [obras, setObras] = useState<Obra[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [dialogAberto, setDialogAberto] = useState(false)
@@ -243,21 +245,32 @@ export const Obras: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Finanças da Obra */}
-                <div className="grid grid-cols-2 gap-2 pt-3 border-t text-xs">
-                  <div>
-                    <span className="text-muted-foreground block">Contratado</span>
-                    <span className="font-bold text-foreground">
-                      R$ {obra.valor_contratado?.toLocaleString('pt-BR')}
-                    </span>
+                {/* Finanças ou Progresso da Obra */}
+                {isDono ? (
+                  <div className="grid grid-cols-2 gap-2 pt-3 border-t text-xs">
+                    <div>
+                      <span className="text-muted-foreground block">Contratado</span>
+                      <span className="font-bold text-foreground">
+                        R$ {obra.valor_contratado?.toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-muted-foreground block">A Receber</span>
+                      <span className="font-black text-emerald-600">
+                        R$ {obra.valor_pendente?.toLocaleString('pt-BR')}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-muted-foreground block">A Receber</span>
-                    <span className="font-black text-emerald-600">
-                      R$ {obra.valor_pendente?.toLocaleString('pt-BR')}
+                ) : (
+                  <div className="pt-3 border-t flex items-center justify-between text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1 font-semibold text-foreground">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-primary" />
+                      {obra.etapas?.filter((e) => e.concluida || e.concluido).length || 0} de{' '}
+                      {obra.etapas?.length || 0} etapas
                     </span>
+                    <span className="text-[11px] font-medium">Modo Operador</span>
                   </div>
-                </div>
+                )}
               </Card>
             </Link>
           )

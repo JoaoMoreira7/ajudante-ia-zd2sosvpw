@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 
 export const Configuracoes: React.FC = () => {
-  const { config, updateConfig, setModo, user, logout } = useAuth()
+  const { config, updateConfig, setModo, setPerfil, perfil, user, logout } = useAuth()
   const [nome, setNome] = useState(config.nome_profissional || '')
   const [empresa, setEmpresa] = useState(config.empresa || '')
   const [salvo, setSalvo] = useState(false)
@@ -36,6 +36,69 @@ export const Configuracoes: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* 0. Perfil de Acesso do Usuário (Dono / Operador) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base font-bold flex items-center gap-2">
+            <Shield className="w-5 h-5 text-primary" />
+            Perfil de Acesso do Usuário
+          </CardTitle>
+          <CardDescription>
+            Se mestre de obras e engenheiro usam o mesmo app, o perfil de operador oculta custos,
+            margens e valores financeiros.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setPerfil('dono')}
+            className={`p-4 rounded-xl border text-left transition-all ${
+              perfil === 'dono'
+                ? 'border-primary bg-primary/10 shadow-sm ring-1 ring-primary'
+                : 'border-border bg-card hover:bg-muted/40'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-black text-sm text-foreground">👑 Dono / Engenheiro</span>
+              {perfil === 'dono' && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
+                  Ativo
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Acesso total: visualiza orçamentos com preços, margens de lucro, faturamento, valores
+              contratados e controle financeiro completo.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPerfil('operador')}
+            className={`p-4 rounded-xl border text-left transition-all ${
+              perfil === 'operador'
+                ? 'border-primary bg-primary/10 shadow-sm ring-1 ring-primary'
+                : 'border-border bg-card hover:bg-muted/40'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-black text-sm text-foreground">
+                👷 Operador / Mestre de Obras
+              </span>
+              {perfil === 'operador' && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
+                  Ativo
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Foco no canteiro: oculta custos, valores e saldos na interface e por voz. Mostra
+              progresso físico, fotos, etapas e materiais.
+            </p>
+          </button>
+        </CardContent>
+      </Card>
 
       {/* 1. Escolha do Modo de Operação */}
       <Card>

@@ -2,12 +2,23 @@ import React, { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { localDB } from '@/lib/localDB'
 import { Orcamento, Cliente } from '@/types/database'
-import { FileSpreadsheet, ArrowLeft, MessageSquare, Check, X, Printer, Share2 } from 'lucide-react'
+import {
+  FileSpreadsheet,
+  ArrowLeft,
+  MessageSquare,
+  Check,
+  X,
+  Printer,
+  Share2,
+  ShieldAlert,
+} from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { useAuth } from '@/contexts/AuthContext'
 
 export const OrcamentoDetalhe: React.FC = () => {
+  const { isOperador } = useAuth()
   const { id } = useParams<{ id: string }>()
   const [orcamento, setOrcamento] = useState<Orcamento | null>(null)
   const [cliente, setCliente] = useState<Cliente | null>(null)
@@ -25,6 +36,24 @@ export const OrcamentoDetalhe: React.FC = () => {
   useEffect(() => {
     carregarDados()
   }, [id])
+
+  if (isOperador) {
+    return (
+      <div className="max-w-xl mx-auto py-12 px-4 text-center space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h1 className="text-xl font-black text-foreground">Orçamento Restrito</h1>
+        <p className="text-sm text-muted-foreground">
+          Usuários com perfil de <strong>Operador</strong> não têm permissão para visualizar preços
+          e detalhes financeiros de orçamentos.
+        </p>
+        <Link to="/obras">
+          <Button className="font-bold">Voltar para Obras</Button>
+        </Link>
+      </div>
+    )
+  }
 
   if (!orcamento) {
     return (

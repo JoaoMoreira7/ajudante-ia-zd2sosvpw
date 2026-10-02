@@ -18,17 +18,23 @@ interface AuthContextType {
   updateConfig: (newConfig: Partial<ConfiguracoesApp>) => Promise<void>
   setModo: (modo: AppMode) => Promise<void>
   toggleAltoContraste: () => Promise<void>
+  perfil: 'dono' | 'operador'
+  isDono: boolean
+  isOperador: boolean
+  setPerfil: (perfil: 'dono' | 'operador') => Promise<void>
   login: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>
   signup: (
     email: string,
     pass: string,
     name: string,
+    perfil?: 'dono' | 'operador',
   ) => Promise<{ success: boolean; error?: string }>
   logout: () => void
 }
 
 const defaultConfig: ConfiguracoesApp = {
   modo: 'profissional',
+  perfil: 'dono',
   fonte_tamanho: 'm',
   alto_contraste: false,
   voz_respostas: true,
@@ -41,9 +47,13 @@ const defaultConfig: ConfiguracoesApp = {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   token: null,
+  perfil: 'dono',
+  isDono: true,
+  isOperador: false,
   isAuthenticated: false,
   isLoading: true,
   config: defaultConfig,
+  setPerfil: async () => {},
   updateConfig: async () => {},
   setModo: async () => {},
   toggleAltoContraste: async () => {},
@@ -53,29 +63,41 @@ const AuthContext = createContext<AuthContextType>({
 })
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<{ id: string; email: string; name?: string } | null>(
+  const [user, setUser] = useState<{
+    id: string
+    email: string
+    name?: string
+    perfil?: 'dono' | 'operador'
+  } | null>(
     pb.authStore.record
       ? {
           id: pb.authStore.record.id,
           email: (pb.authStore.record as any).email || '',
           name: (pb.authStore.record as any).name,
+          perfil: (pb.authStore.record as any).perfil || 'dono',
         }
       : null,
   )
   const [token, setToken] = useState<string | null>(pb.authStore.token)
   const [isLoading, setIsLoading] = useState(true)
   const [config, setConfig] = useState<ConfiguracoesApp>(defaultConfig)
+  const [perfilAtivo, setPerfilAtivo] = useState<'dono' | 'operador'>(() => {
+    return (localStorage.getItem('ajudante_perfil_ativo') as any) || 'dono'
+  })
 
   useEffect(() => {
     // Escuta mudanças de auth
     const unsub = pb.authStore.onChange((newToken, model) => {
       setToken(newToken)
       if (model) {
+        const p = (model as any).perfil || perfilAtivo || 'dono'
         setUser({
           id: model.id,
           email: (model as any).email || '',
           name: (model as any).name,
+          perfil: p,
         })
+        setPerfilAtivo(p)
       } else {
         setUser(null)
       }
@@ -89,6 +111,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const configs = await localDB.getAll('configuracoes')
         if (configs.length > 0) {
           setConfig(configs[0])
+          if (configs[0].perfil) {
+            setPerfilAtivo(configs[0].perfil)
+          }
         }
       } catch (err) {
         console.warn('Erro ao inicializar DB local:', err)
@@ -122,7 +147,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateConfig = async (newConfig: Partial<ConfiguracoesApp>) => {
     const updated = { ...config, ...newConfig }
     setConfig(updated)
+    if (newConfig.perfil) {
+      setPerfilAtivo(newConfig.perfil)
+      localStorage.setItem('ajudante_perfil_ativo', newConfig.perfil)
+    }
     await localDB.put('configuracoes', updated)
+  }
+
+  const setPerfil = async (novoPerfil: 'dono' | 'operador') => {
+    setPerfilAtivo(novoPerfil)
+    localStorage.setItem('ajudante_perfil_ativo', novoPerfil)
+    await updateConfig({ perfil: novoPerfil })
+    if (pb.authStore.record && pb.authStore.isValid) {
+      try {
+        await pb.collection('users').update(pb.authStore.record.id, { perfil: novoPerfil })
+      } catch (err) {
+        // Fallback se offline, já salvo localmente
+      }
+    }
   }
 
   const setModo = async (modo: AppMode) => {
@@ -137,11 +179,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       if (navigator.onLine) {
         const authData = await pb.collection('users').authWithPassword(email.trim(), pass)
+        const p = (authData.record as any).perfil || 'dono'
         setUser({
           id: authData.record.id,
           email: authData.record.email,
           name: authData.record.name,
+          perfil: p,
         })
+        setPerfilAtivo(p)
+        localStorage.setItem('ajudante_perfil_ativo', p)
         setToken(authData.token)
         return { success: true }
       }
@@ -151,7 +197,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         (email.toLowerCase().includes('joao')
           ? 'jaocarlos'
           : Math.random().toString(36).substring(2, 8))
-      const fakeUser = { id: localId, email: email.trim(), name: email.split('@')[0] }
+      const fakeUser = {
+        id: localId,
+        email: email.trim(),
+        name: email.split('@')[0],
+        perfil: perfilAtivo || 'dono',
+      }
       setUser(fakeUser)
       setToken('local_token_' + Date.now())
       return { success: true }
@@ -159,7 +210,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Se offline ou falha de rede
       if (!navigator.onLine) {
         const localId = 'usr_offline'
-        setUser({ id: localId, email: email.trim(), name: email.split('@')[0] })
+        setUser({
+          id: localId,
+          email: email.trim(),
+          name: email.split('@')[0],
+          perfil: perfilAtivo || 'dono',
+        })
         setToken('local_token_' + Date.now())
         return { success: true }
       }
@@ -167,7 +223,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
-  const signup = async (email: string, pass: string, name: string) => {
+  const signup = async (
+    email: string,
+    pass: string,
+    name: string,
+    perfil: 'dono' | 'operador' = 'dono',
+  ) => {
     try {
       if (navigator.onLine) {
         await pb.collection('users').create({
@@ -175,11 +236,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           password: pass,
           passwordConfirm: pass,
           name: name.trim(),
+          perfil,
         })
+        setPerfilAtivo(perfil)
+        localStorage.setItem('ajudante_perfil_ativo', perfil)
         return await login(email, pass)
       }
       // Offline fallback
-      setUser({ id: 'usr_local_' + Date.now(), email: email.trim(), name: name.trim() })
+      setUser({
+        id: 'usr_local_' + Date.now(),
+        email: email.trim(),
+        name: name.trim(),
+        perfil,
+      })
+      setPerfilAtivo(perfil)
+      localStorage.setItem('ajudante_perfil_ativo', perfil)
       setToken('local_token_' + Date.now())
       return { success: true }
     } catch (err: any) {
@@ -193,14 +264,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null)
   }
 
+  const efetivoPerfil = config.perfil || perfilAtivo || user?.perfil || 'dono'
+
   return (
     <AuthContext.Provider
       value={{
         user,
         token,
+        perfil: efetivoPerfil,
+        isDono: efetivoPerfil === 'dono',
+        isOperador: efetivoPerfil === 'operador',
         isAuthenticated: Boolean(user || token),
         isLoading,
         config,
+        setPerfil,
         updateConfig,
         setModo,
         toggleAltoContraste,

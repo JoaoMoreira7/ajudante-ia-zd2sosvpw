@@ -2,17 +2,39 @@ import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { localDB } from '@/lib/localDB'
 import { Orcamento } from '@/types/database'
-import { FileSpreadsheet, Plus, MessageSquare, CheckCircle, Clock } from 'lucide-react'
+import { FileSpreadsheet, Plus, MessageSquare, CheckCircle, Clock, ShieldAlert } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { useAuth } from '@/contexts/AuthContext'
 
 export const Orcamentos: React.FC = () => {
+  const { isOperador } = useAuth()
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([])
 
   useEffect(() => {
     localDB.getAll('orcamentos').then((list) => setOrcamentos(list))
   }, [])
+
+  if (isOperador) {
+    return (
+      <div className="max-w-xl mx-auto py-12 px-4 text-center space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h1 className="text-xl font-black text-foreground">Acesso Restrito a Orçamentos</h1>
+        <p className="text-sm text-muted-foreground">
+          Seu perfil está definido como <strong>Operador</strong>. Preços unitários, valores totais
+          e margens comerciais são restritos ao Dono da obra.
+        </p>
+        <div className="pt-2">
+          <Link to="/obras">
+            <Button className="font-bold">Ver Obras e Etapas</Button>
+          </Link>
+        </div>
+      </div>
+    )
+  }
 
   const totalEmOrcamentos = orcamentos.reduce((acc, orc) => acc + (orc.total || 0), 0)
 

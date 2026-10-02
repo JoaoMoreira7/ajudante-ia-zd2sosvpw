@@ -12,6 +12,7 @@ import {
   Wrench,
   Settings,
 } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface SidebarProps {
   onOpenVoice: () => void
@@ -31,6 +32,18 @@ const navItems = [
 ]
 
 export const DesktopSidebar: React.FC<SidebarProps> = ({ onOpenVoice }) => {
+  const { isOperador } = useAuth()
+
+  const itensFiltrados = navItems.filter((item) => {
+    if (isOperador) {
+      // Oculta finanças e orçamentos da barra lateral para o perfil Operador
+      if (item.path === '/financeiro' || item.path === '/orcamentos') {
+        return false
+      }
+    }
+    return true
+  })
+
   return (
     <aside className="hidden lg:flex flex-col w-64 border-r border-border bg-card/60 backdrop-blur p-4 shrink-0 min-h-[calc(100vh-61px)]">
       {/* Botão de Destaque Falar */}
@@ -45,7 +58,7 @@ export const DesktopSidebar: React.FC<SidebarProps> = ({ onOpenVoice }) => {
 
       {/* Navegação Principal */}
       <nav className="flex flex-col gap-1 flex-1">
-        {navItems.map((item) => {
+        {itensFiltrados.map((item) => {
           const Icon = item.icon
           return (
             <NavLink

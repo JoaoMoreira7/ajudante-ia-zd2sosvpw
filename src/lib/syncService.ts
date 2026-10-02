@@ -74,6 +74,7 @@ export async function pullRemoteData(): Promise<void> {
     'financeiro',
     'materiais_estoque',
     'diario_obra',
+    'documentos',
     'configuracoes',
   ]
 
@@ -138,12 +139,12 @@ async function processQueueItem(item: SyncQueueItem): Promise<void> {
     // Se o id for temporário local (loc_...), criamos novo no servidor e atualizamos localmente
     const created = await pb.collection(entidade).create(body, { requestKey: null })
     // Substitui o registro local temporário pelo id final retornado
-    if (entidade_id.startsWith('loc_')) {
+    if (entidade_id.startsWith('loc_') || entidade_id.startsWith('local_')) {
       await localDelete(entidade, entidade_id, false)
       await localPut(entidade, created, true)
     }
   } else if (operacao === 'update') {
-    if (entidade_id.startsWith('loc_')) {
+    if (entidade_id.startsWith('loc_') || entidade_id.startsWith('local_')) {
       // Se era local e virou update antes de sync, cria
       const created = await pb.collection(entidade).create(body, { requestKey: null })
       await localDelete(entidade, entidade_id, false)
@@ -153,8 +154,12 @@ async function processQueueItem(item: SyncQueueItem): Promise<void> {
       await localPut(entidade, updated, true)
     }
   } else if (operacao === 'delete') {
-    if (!entidade_id.startsWith('loc_')) {
-      await pb.collection(entidade).delete(entidade_id, { requestKey: null })
+    if (!entidade_id.startsWith('loc_') && !entidade_id.startsWith('local_')) {
+      try {
+        await pb.collection(entidade).delete(entidade_id, { requestKey: null })
+      } catch (delErr) {
+        // Se já não existe no backend, ignora
+      }
     }
     await localDelete(entidade, entidade_id, false)
   }
@@ -170,8 +175,9 @@ export async function syncNow(): Promise<void> {
   currentStatus.isSyncing = true
   notifyListeners()
 
+  let result = { processed: 0, errors: 0 }
   try {
-    await pushSyncQueue()
+    result = await pushSyncQueue()
     await pullRemoteData()
     const nowStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     currentStatus.lastSyncTime = nowStr
@@ -183,6 +189,7 @@ export async function syncNow(): Promise<void> {
     currentStatus.pendingCount = (await getPendingSyncQueue()).length
     notifyListeners()
   }
+  return result as any
 }
 
 // -------------------------------------------------------------

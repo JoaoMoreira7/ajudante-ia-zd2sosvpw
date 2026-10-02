@@ -1,8 +1,19 @@
 import React, { useState, useEffect } from 'react'
 import { localDB } from '@/lib/localDB'
+import { mutateEntity } from '@/lib/syncService'
 import { FinanceiroLancamento } from '@/types/database'
 import * as MathEngine from '@/lib/mathEngine'
-import { DollarSign, Plus, ArrowUpCircle, ArrowDownCircle, TrendingUp, Filter } from 'lucide-react'
+import {
+  DollarSign,
+  Plus,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  TrendingUp,
+  Filter,
+  ShieldAlert,
+} from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
+import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,6 +28,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 
 export const Financeiro: React.FC = () => {
+  const { isOperador } = useAuth()
   const [lancamentos, setLancamentos] = useState<FinanceiroLancamento[]>([])
   const [dialogAberto, setDialogAberto] = useState(false)
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'entrada' | 'saida'>('todos')
@@ -37,6 +49,26 @@ export const Financeiro: React.FC = () => {
     carregarLancamentos()
   }, [])
 
+  if (isOperador) {
+    return (
+      <div className="max-w-xl mx-auto py-12 px-4 text-center space-y-4">
+        <div className="w-16 h-16 rounded-3xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h1 className="text-xl font-black text-foreground">Acesso Restrito ao Financeiro</h1>
+        <p className="text-sm text-muted-foreground">
+          Seu perfil está configurado como <strong>Operador</strong>. Os valores, despesas e saldos
+          da obra são reservados ao perfil <strong>Dono / Engenheiro</strong>.
+        </p>
+        <div className="pt-2">
+          <Link to="/obras">
+            <Button className="font-bold">Ir para Minhas Obras</Button>
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
   const handleSalvar = async (e: React.FormEvent) => {
     e.preventDefault()
     const v = parseFloat(valor)
@@ -54,7 +86,7 @@ export const Financeiro: React.FC = () => {
       created: new Date().toISOString(),
     }
 
-    await localDB.put('financeiro', novo)
+    await mutateEntity('financeiro', 'create', novo)
     setDialogAberto(false)
     setDescricao('')
     setValor('')

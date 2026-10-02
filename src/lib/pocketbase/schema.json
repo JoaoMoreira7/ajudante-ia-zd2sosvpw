@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-18T19:39:30.192Z",
+  "generatedAt": "2026-10-02T22:00:40.711Z",
   "collections": [
     {
       "name": "users",
@@ -37,6 +37,13 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "perfil",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["dono", "operador"]
         }
       ],
       "indexes": [
@@ -651,6 +658,24 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "etapa_index",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "geolocalizacao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "data_foto",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": ["CREATE INDEX idx_documentos_owner ON documentos (owner_id)"]

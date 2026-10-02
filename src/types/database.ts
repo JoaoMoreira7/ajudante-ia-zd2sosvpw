@@ -1,9 +1,12 @@
 // Tipos completos das entidades do Ajudante IA
 
+export type UserRole = 'dono' | 'operador'
+
 export interface UserProfile {
   id: string
   email: string
   name: string
+  perfil?: UserRole
   avatar?: string
   created?: string
   updated?: string
@@ -155,6 +158,10 @@ export interface DocumentoObra {
     | 'outro'
   arquivo?: string
   descricao?: string
+  etapa_index?: number
+  etapa_nome?: string
+  data_foto?: string
+  geolocalizacao?: string
   created?: string
   updated?: string
 }
@@ -163,6 +170,7 @@ export interface ConfiguracoesApp {
   id?: string
   owner_id?: string
   modo: 'simples' | 'profissional' | 'economico'
+  perfil?: UserRole
   fonte_tamanho: 'p' | 'm' | 'g'
   alto_contraste: boolean
   voz_respostas: boolean
@@ -186,6 +194,7 @@ export interface SyncQueueItem {
     | 'financeiro'
     | 'materiais_estoque'
     | 'diario_obra'
+    | 'documentos'
     | 'configuracoes'
   entidade_id: string
   operacao: 'create' | 'update' | 'delete'

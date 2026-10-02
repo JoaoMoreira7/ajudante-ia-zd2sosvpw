@@ -11,6 +11,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react'
 import { parseLocalIntent, ParsedIntent } from '@/lib/intentParser'
 import * as MathEngine from '@/lib/mathEngine'
 import { localDB } from '@/lib/localDB'
+import { mutateEntity } from '@/lib/syncService'
 import pb from '@/lib/pocketbase/client'
 import { useAuth } from '@/contexts/AuthContext'
 import { ReversibleAction } from '@/types/database'
@@ -61,7 +62,7 @@ interface VoiceContextType {
 const VoiceContext = createContext<VoiceContextType>({} as any)
 
 export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { config } = useAuth()
+  const { config, isOperador } = useAuth()
   const [interactions, setInteractions] = useState<ChatInteraction[]>([
     {
       id: 'welcome',
@@ -278,6 +279,19 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         respostaTexto = `Resultado: ${parsed.params.n1} ${parsed.params.op} ${parsed.params.n2} = ${parsed.params.resultado}`
         formula = `${parsed.params.n1} ${parsed.params.op} ${parsed.params.n2} = ${parsed.params.resultado}`
         tipoBadge = 'EXATO'
+      } else if (parsed.intent === 'consultar_saldo' && isOperador) {
+        // PERMISSÃO: Operador não tem acesso a saldo/custos
+        respostaTexto =
+          'Seu perfil de acesso é Operador. A consulta de valores financeiros e saldos é reservada ao Dono da obra.'
+        tipoBadge = 'EXATO'
+      } else if (parsed.intent === 'registrar_saida' && isOperador) {
+        respostaTexto =
+          'Seu perfil de acesso é Operador. O registro de custos e saídas financeiras é restrito ao Dono da obra.'
+        tipoBadge = 'EXATO'
+      } else if (parsed.intent === 'registrar_entrada' && isOperador) {
+        respostaTexto =
+          'Seu perfil de acesso é Operador. O registro de pagamentos e entradas financeiras é restrito ao Dono da obra.'
+        tipoBadge = 'EXATO'
       } else if (parsed.intent === 'registrar_saida') {
         // OPERAÇÃO FINANCEIRA COM CONFIRMAÇÃO OBRIGATÓRIA
         const val = parsed.params.valor
@@ -285,9 +299,9 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const desc = parsed.params.descricao
 
         const executeSaida = async () => {
-          const item = await localDB.put('financeiro', {
+          const newId = await mutateEntity('financeiro', 'create', {
             id: 'fin_' + Date.now(),
-            owner_id: 'local_user',
+            owner_id: pb.authStore.model?.id || 'local_user',
             tipo: 'saida' as const,
             categoria: cat as any,
             descricao: desc,
@@ -300,7 +314,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             descricao: `Saída de R$ ${val.toFixed(2)} (${desc})`,
             timestamp: Date.now(),
             desfazer: async () => {
-              await localDB.delete('financeiro', item.id)
+              await mutateEntity('financeiro', 'delete', { id: newId })
             },
           })
         }
@@ -324,9 +338,9 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const desc = parsed.params.descricao
 
         const executeEntrada = async () => {
-          const item = await localDB.put('financeiro', {
+          const newId = await mutateEntity('financeiro', 'create', {
             id: 'fin_' + Date.now(),
-            owner_id: 'local_user',
+            owner_id: pb.authStore.model?.id || 'local_user',
             tipo: 'entrada' as const,
             categoria: 'pagamento',
             descricao: desc,
@@ -339,7 +353,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             descricao: `Entrada de R$ ${val.toFixed(2)} (${desc})`,
             timestamp: Date.now(),
             desfazer: async () => {
-              await localDB.delete('financeiro', item.id)
+              await mutateEntity('financeiro', 'delete', { id: newId })
             },
           })
         }

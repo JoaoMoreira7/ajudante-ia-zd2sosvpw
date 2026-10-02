@@ -13,6 +13,7 @@ export const Cadastro: React.FC = () => {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [perfil, setPerfil] = useState<'dono' | 'operador'>('dono')
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
 
@@ -25,7 +26,7 @@ export const Cadastro: React.FC = () => {
     }
     setCarregando(true)
 
-    const res = await signup(email, password, name)
+    const res = await signup(email, password, name, perfil)
     setCarregando(false)
     if (res.success) {
       navigate('/')
@@ -83,6 +84,44 @@ export const Cadastro: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Perfil de Acesso</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPerfil('dono')}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    perfil === 'dono'
+                      ? 'border-primary bg-primary/10 font-bold text-foreground'
+                      : 'border-border bg-card text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  <span className="text-xs font-bold block text-foreground">
+                    👑 Dono da Obra / Engenheiro
+                  </span>
+                  <span className="text-[10px] text-muted-foreground block mt-0.5">
+                    Acesso total a valores, despesas, margens e orçamentos.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPerfil('operador')}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    perfil === 'operador'
+                      ? 'border-primary bg-primary/10 font-bold text-foreground'
+                      : 'border-border bg-card text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  <span className="text-xs font-bold block text-foreground">
+                    👷 Operador / Mestre
+                  </span>
+                  <span className="text-[10px] text-muted-foreground block mt-0.5">
+                    Foco nas etapas, fotos e diário de obra (valores ocultos).
+                  </span>
+                </button>
+              </div>
             </div>
 
             <Button type="submit" disabled={carregando} className="w-full font-bold h-11 text-base">

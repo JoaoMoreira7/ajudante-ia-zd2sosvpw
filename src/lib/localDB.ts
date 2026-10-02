@@ -15,14 +15,15 @@ import {
   FinanceiroLancamento,
   MaterialEstoque,
   DiarioObra,
+  DocumentoObra,
   ConfiguracoesApp,
   SyncQueueItem,
 } from '@/types/database'
 
 export type { SyncQueueItem } from '@/types/database'
 
-const DB_NAME = 'ajudante_ia_local_v1'
-const DB_VERSION = 2
+const DB_NAME = 'ajudante_ia_local_v2'
+const DB_VERSION = 3
 
 export interface DBStores {
   clientes: Cliente
@@ -31,6 +32,7 @@ export interface DBStores {
   financeiro: FinanceiroLancamento
   materiais_estoque: MaterialEstoque
   diario_obra: DiarioObra
+  documentos: DocumentoObra
   configuracoes: ConfiguracoesApp
   sync_queue: SyncQueueItem
 }
@@ -56,6 +58,7 @@ class LocalDatabase {
       'financeiro',
       'materiais_estoque',
       'diario_obra',
+      'documentos',
       'configuracoes',
       'sync_queue',
     ]
@@ -82,6 +85,7 @@ class LocalDatabase {
             'financeiro',
             'materiais_estoque',
             'diario_obra',
+            'documentos',
             'configuracoes',
             'sync_queue',
           ]
@@ -147,15 +151,36 @@ class LocalDatabase {
     }
   }
 
-  public async put<T extends StoreName>(storeName: T, item: DBStores[T]): Promise<DBStores[T]> {
+  public async put<T extends StoreName>(
+    storeName: T,
+    item: DBStores[T],
+    isRemoteSync = false,
+  ): Promise<DBStores[T]> {
     const raw = item as unknown as Record<string, unknown>
     if (!raw.id) {
-      raw.id = 'local_' + Math.random().toString(36).substring(2, 10)
+      raw.id = 'loc_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8)
     }
     if (!raw.created) {
       raw.created = new Date().toISOString()
     }
-    raw.updated = new Date().toISOString()
+    if (!raw.updated) {
+      raw.updated = new Date().toISOString()
+    }
+
+    // Resolução de conflito Last-Write-Wins: se veio do sync remoto e o registro local
+    // tem updated mais recente que o remoto, mantém o local
+    if (isRemoteSync && raw.id) {
+      const existing = await this.getById(storeName, String(raw.id))
+      if (existing) {
+        const localRaw = existing as unknown as Record<string, unknown>
+        const localUpdated = localRaw.updated ? new Date(String(localRaw.updated)).getTime() : 0
+        const remoteUpdated = raw.updated ? new Date(String(raw.updated)).getTime() : 0
+        if (localUpdated > remoteUpdated) {
+          // O registro local foi alterado mais recentemente, preserva local
+          return existing
+        }
+      }
+    }
 
     if (!this.isIndexedDBAvailable) {
       const map = this.memoryFallback.get(storeName) || new Map()
@@ -208,6 +233,7 @@ class LocalDatabase {
       'financeiro',
       'materiais_estoque',
       'diario_obra',
+      'documentos',
       'configuracoes',
       'sync_queue',
     ]
@@ -617,9 +643,9 @@ export async function localGetAll<T>(storeName: string): Promise<T[]> {
 export async function localPut<T extends { id?: string }>(
   storeName: string,
   item: T,
-  _isRemoteSync = false,
+  isRemoteSync = false,
 ): Promise<T> {
-  return localDB.put(storeName as StoreName, item as any) as unknown as Promise<T>
+  return localDB.put(storeName as StoreName, item as any, isRemoteSync) as unknown as Promise<T>
 }
 
 export async function localDelete(

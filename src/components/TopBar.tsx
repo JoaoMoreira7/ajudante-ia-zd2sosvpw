@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Badge } from '@/components/ui/badge'
-import { Wifi, WifiOff, HardHat, Sparkles, Feather } from 'lucide-react'
+import { Wifi, WifiOff, HardHat, Sparkles, Feather, RefreshCw, CheckCircle } from 'lucide-react'
+import { subscribeSyncStatus, syncNow, SyncStatus } from '@/lib/syncService'
+import { toast } from '@/hooks/use-toast'
 import {
   Select,
   SelectContent,
@@ -14,22 +16,35 @@ import { Link } from 'react-router-dom'
 
 export const TopBar: React.FC = () => {
   const { config, setModo } = useAuth()
-  const [isOnline, setIsOnline] = useState(
-    typeof navigator !== 'undefined' ? navigator.onLine : true,
-  )
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
+    isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+    isSyncing: false,
+    lastSyncTime: null,
+    pendingCount: 0,
+  })
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
-
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
+    const unsub = subscribeSyncStatus((st) => {
+      setSyncStatus(st)
+    })
+    return () => unsub()
   }, [])
+
+  const handleForcarSync = async () => {
+    if (syncStatus.isSyncing) return
+    if (!syncStatus.isOnline) {
+      toast({
+        title: 'Sem conexão de rede',
+        description: 'Os dados continuam salvos no aparelho e serão sincronizados ao conectar.',
+      })
+      return
+    }
+    await syncNow()
+    toast({
+      title: 'Sincronização concluída',
+      description: 'Todos os registros locais foram enviados para a nuvem.',
+    })
+  }
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 px-4 py-2.5 flex items-center justify-between shadow-xs">
@@ -85,17 +100,53 @@ export const TopBar: React.FC = () => {
           </Select>
         </div>
 
+        {/* Indicador de Sincronização Pendente */}
+        {syncStatus.pendingCount > 0 && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={handleForcarSync}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500 text-amber-950 hover:bg-amber-400 active:scale-95 transition-all shadow-xs animate-pulse"
+              >
+                <RefreshCw
+                  className={`w-3.5 h-3.5 ${syncStatus.isSyncing ? 'animate-spin' : ''}`}
+                />
+                <span>
+                  {syncStatus.pendingCount}{' '}
+                  <span className="hidden sm:inline">
+                    {syncStatus.pendingCount === 1 ? 'registro pendente' : 'registros pendentes'}
+                  </span>
+                </span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" align="end" className="max-w-xs text-xs p-3">
+              <p className="font-bold mb-1">
+                {syncStatus.pendingCount}{' '}
+                {syncStatus.pendingCount === 1 ? 'registro salvo' : 'registros salvos'} no aparelho
+              </p>
+              <p>
+                {syncStatus.isOnline
+                  ? 'Toque para sincronizar com a nuvem agora.'
+                  : 'Aguardando conexão com a internet. Nada será perdido.'}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        )}
+
         {/* Indicador Online/Offline com tooltip */}
         <Tooltip>
           <TooltipTrigger asChild>
-            <div
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors cursor-help ${
-                isOnline
+            <button
+              type="button"
+              onClick={handleForcarSync}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer ${
+                syncStatus.isOnline
                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
                   : 'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950 dark:text-amber-200'
               }`}
             >
-              {isOnline ? (
+              {syncStatus.isOnline ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                   <Wifi className="w-3.5 h-3.5" />
@@ -108,16 +159,35 @@ export const TopBar: React.FC = () => {
                   <span className="hidden md:inline">Offline</span>
                 </>
               )}
-            </div>
+            </button>
           </TooltipTrigger>
           <TooltipContent side="bottom" align="end" className="max-w-xs text-xs p-3">
-            {isOnline ? (
-              <p>Conectado à internet. Todos os dados são sincronizados com a nuvem.</p>
+            {syncStatus.isOnline ? (
+              <div>
+                <p className="font-bold text-emerald-700 dark:text-emerald-300">
+                  Conectado à internet
+                </p>
+                <p className="mt-0.5">
+                  {syncStatus.pendingCount === 0
+                    ? 'Todos os dados estão sincronizados.'
+                    : `${syncStatus.pendingCount} pendente(s) de envio. Toque para sincronizar.`}
+                </p>
+                {syncStatus.lastSyncTime && (
+                  <p className="text-[10px] text-muted-foreground mt-1 font-mono">
+                    Última sincronização: {syncStatus.lastSyncTime}
+                  </p>
+                )}
+              </div>
             ) : (
-              <p>
-                Você está offline. Os dados estão salvos no aparelho e serão sincronizados quando a
-                internet voltar.
-              </p>
+              <div>
+                <p className="font-bold text-amber-700 dark:text-amber-300">
+                  Modo Offline no canteiro
+                </p>
+                <p className="mt-0.5">
+                  Você está sem internet. Todos os gastos, fotos e etapas ficam salvos com segurança
+                  no seu celular e sincronizam automaticamente ao reconectar.
+                </p>
+              </div>
             )}
           </TooltipContent>
         </Tooltip>
