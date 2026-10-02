@@ -338,7 +338,11 @@ export const ObraDetalhe: React.FC = () => {
         clienteNome: clienteObra?.nome || 'Cliente',
         obraTitulo: obra.titulo,
         obraEndereco: obra.endereco || undefined,
-        previsaoTermino: osPrevisao || (obra.previsao_termino ? new Date(obra.previsao_termino).toLocaleDateString('pt-BR') : 'A combinar'),
+        previsaoTermino:
+          osPrevisao ||
+          (obra.previsao_termino
+            ? new Date(obra.previsao_termino).toLocaleDateString('pt-BR')
+            : 'A combinar'),
         servicosEtapas,
         valorTotal: val,
         observacoes: osObs || undefined,

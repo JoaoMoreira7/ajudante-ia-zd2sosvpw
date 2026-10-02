@@ -58,6 +58,14 @@ describe('Interpretador Local de Intenções (Português do Brasil)', () => {
     expect(resSub.params.quantidade).toBe(5)
   })
 
+  test('Estoque: O que está acabando? e Faz uma lista de compras', () => {
+    const resAcabando = parseLocalIntent('O que está acabando?')
+    expect(resAcabando.intent).toBe('estoque_consultar_acabando')
+
+    const resLista = parseLocalIntent('Faz uma lista de compras')
+    expect(resLista.intent).toBe('estoque_lista_compras')
+  })
+
   test('Aritmética: Quanto é 5 vezes 3?', () => {
     const res = parseLocalIntent('Quanto é 5 vezes 3?')
     expect(res.intent).toBe('aritmetica_simples')

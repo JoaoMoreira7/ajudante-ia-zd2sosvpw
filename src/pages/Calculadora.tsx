@@ -574,11 +574,11 @@ export const Calculadora: React.FC = () => {
               </div>
 
               <Button
-                onClick={() => abrirListaMateriais('pintura', parseFloat(pintArea) || 0, 10)}
+                onClick={() => abrirListaMateriais('contrapiso', parseFloat(cpArea) || 0, 10)}
                 className="w-full font-bold gap-2 bg-primary text-primary-foreground h-11 rounded-xl shadow-xs"
               >
                 <ShoppingCart className="w-4 h-4" />
-                Gerar Lista de Materiais da Pintura
+                Gerar Lista de Materiais do Contrapiso
               </Button>
             </CardContent>
           </Card>
@@ -773,6 +773,14 @@ export const Calculadora: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              <Button
+                onClick={() => abrirListaMateriais('pintura', parseFloat(pintArea) || 0, 10)}
+                className="w-full font-bold gap-2 bg-primary text-primary-foreground h-11 rounded-xl shadow-xs"
+              >
+                <ShoppingCart className="w-4 h-4" />
+                Gerar Lista de Materiais da Pintura
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
