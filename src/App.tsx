@@ -31,15 +31,21 @@ export default function App() {
   // Garantir a remoção contínua e definitiva de badges de atribuição sem sobrecarregar a CPU
   React.useEffect(() => {
     const removeSkipBadges = () => {
-      // 1. Seletores diretos
+      // 1. Seletores diretos amplos
       const candidates = document.querySelectorAll<HTMLElement>(
-        '#skip-badge, .skip-badge, [data-skip-badge], a[href*="goskip.dev"], a[href*="skip.it"], img[src*="skip.png"]',
+        '#skip-badge, .skip-badge, [data-skip-badge], a[href*="goskip.dev"], a[href*="skip.it"], a[href*="goskip"], img[src*="skip.png"], img[alt*="Skip" i], [data-skip-element]',
       )
       candidates.forEach((el) => {
         const parent = el.parentElement
         el.remove()
-        // Se o elemento pai continha apenas o badge ou texto "Criado com o Skip", remove-o também
-        if (parent && parent.innerText && parent.innerText.includes('Criado com o Skip')) {
+        // Se o elemento pai continha apenas o badge ou texto "Criado com", remove-o também
+        if (
+          parent &&
+          parent.innerText &&
+          (parent.innerText.toLowerCase().includes('criado com o skip') ||
+            parent.innerText.toLowerCase().includes('criado com skip') ||
+            parent.innerText.toLowerCase().includes('made with skip'))
+        ) {
           parent.remove()
         }
       })
@@ -49,7 +55,12 @@ export default function App() {
       const nodesToRemove: Node[] = []
       while (walker.nextNode()) {
         const node = walker.currentNode
-        if (node.textContent && node.textContent.includes('Criado com o Skip')) {
+        const text = (node.textContent || '').toLowerCase()
+        if (
+          text.includes('criado com o skip') ||
+          text.includes('criado com skip') ||
+          text.includes('made with skip')
+        ) {
           nodesToRemove.push(node)
         }
       }
