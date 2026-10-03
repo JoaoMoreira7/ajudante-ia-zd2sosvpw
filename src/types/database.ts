@@ -306,8 +306,9 @@ export interface NotificacaoSistema {
 
 export interface LimitesPlano {
   maxClientes: number // -1 = ilimitado
-  maxObrasSimultaneas: number // -1 = ilimitado
+  maxObrasSimultaneas: number // 2 no essencial, 10 ou ilimitado nos superiores (-1)
   maxOrcamentosMes: number // -1 = ilimitado
+  maxMinutosAudioMes: number // 60 no essencial, 300 no profissional, -1 no empresa (ilimitado)
   permitePdfDocumentos: boolean // recibos, OS, orçamentos timbrados
   permiteDiarioVoz: boolean
   permiteFotosObra: boolean

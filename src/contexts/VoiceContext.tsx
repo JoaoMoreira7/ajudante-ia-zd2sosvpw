@@ -15,12 +15,30 @@ import { mutateEntity } from '@/lib/syncService'
 import pb from '@/lib/pocketbase/client'
 import { useAuth } from '@/contexts/AuthContext'
 import { ReversibleAction } from '@/types/database'
+import { normalizarJargaoObra } from '@/lib/obraGlossary'
+import { obterConsumoAudio, registrarUsoAudio } from '@/lib/audioUsageTracker'
+import { verificarLimiteAudioMinutos } from '@/lib/planLimits'
+
+export type CardAcaoTipo = 'material' | 'ocorrencia' | 'financeiro' | 'calculo' | 'aviso'
+
+export interface CardAcaoItem {
+  id: string
+  tipo: CardAcaoTipo
+  titulo: string
+  resumo: string
+  detalhe?: string
+  status: 'sucesso' | 'aviso' | 'erro' | 'pendente'
+  icone?: string
+  ttsTexto: string
+}
 
 export interface ChatInteraction {
   id: string
   autor: 'usuario' | 'ajudante'
   texto: string
   tipoCalculo?: 'EXATO' | 'ESTIMATIVA' | 'TECNICA'
+  timestamp: number
+  cardsAcao?: CardAcaoItem[] // Melhoria 2: confirmação visual em cards coloridos compactos
   detalhes?: {
     formula?: string
     passos?: string[]
@@ -28,10 +46,9 @@ export interface ChatInteraction {
     sugestoes?: string[]
     confirmacaoNecessaria?: boolean
     acaoPendente?: () => Promise<void>
+    correcoesGlossario?: Array<{ original: string; corrigido: string; termoDetectado: string }>
   }
-  timestamp: number
 }
-
 export interface DialogoOrcamentoVoz {
   etapa: 'aguardando_preco_m2' | 'aguardando_materiais' | 'aguardando_sinal' | 'aguardando_parcelas'
   servico: string
@@ -60,13 +77,13 @@ export interface ConversationContextData {
   ultimoCalculoMateriais?: MathEngine.ListaMateriaisEstimativa
 }
 
-interface VoiceContextType {
+export interface VoiceContextType {
   interactions: ChatInteraction[]
   contextData: ConversationContextData
   isProcessing: boolean
   statusText: string
   currentPendingConfirm: ChatInteraction | null
-  processUserInput: (input: string) => Promise<void>
+  processUserInput: (input: string, audioDurationSeconds?: number) => Promise<void>
   confirmCurrentAction: () => Promise<void>
   rejectCurrentAction: () => void
   clearContext: () => void
@@ -77,7 +94,7 @@ interface VoiceContextType {
 const VoiceContext = createContext<VoiceContextType>({} as any)
 
 export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { config, isOperador } = useAuth()
+  const { config, isOperador, assinatura, plano, isTrial, profile } = useAuth()
   const [interactions, setInteractions] = useState<ChatInteraction[]>([
     {
       id: 'welcome',
@@ -147,31 +164,59 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     ])
   }, [])
 
-  const processUserInput = async (rawInput: string) => {
-    const text = rawInput.trim()
-    if (!text) return
+  const processUserInput = async (rawInput: string, audioDurationSeconds: number = 0) => {
+    const textOriginal = rawInput.trim()
+    if (!textOriginal) return
 
-    // Adiciona fala do usuário
+    // MELHORIA 1: Normalização fonética e jargão de obra antes do parse e envio
+    const normalizacao = normalizarJargaoObra(textOriginal)
+    const text = normalizacao.textoNormalizado
+
+    // MELHORIA 3: Registrar e verificar consumo de minutos de áudio
+    const duracaoSegundos = audioDurationSeconds > 0 ? audioDurationSeconds : 5
+    let consumoAtual = obterConsumoAudio(profile?.id)
+    if (audioDurationSeconds > 0) {
+      consumoAtual = registrarUsoAudio(duracaoSegundos, profile?.id)
+    }
+
+    const minutosUsados = consumoAtual.segundosUsados / 60
+    const checagemAudio = verificarLimiteAudioMinutos(
+      plano,
+      minutosUsados,
+      assinatura?.modulos_liberados,
+      isTrial,
+    )
+
+    // Adiciona fala do usuário (registra original e se houve normalização para clareza)
     const userMsgId = 'usr_' + Date.now()
     setInteractions((prev) => [
       ...prev,
       {
         id: userMsgId,
         autor: 'usuario',
-        texto: text,
+        texto: textOriginal,
         timestamp: Date.now(),
+        detalhes: {
+          correcoesGlossario: normalizacao.houveCorrecao ? normalizacao.correcoes : undefined,
+        },
       },
     ])
 
+    // Se o limite de minutos de áudio por plano foi ultrapassado:
+    // REGRA DE OURO: Bloqueia apenas a nuvem / IA; permite processamento determinístico local!
+    const audioLimiteAtingido = !checagemAudio.permitido
+
     setIsProcessing(true)
-    setStatusText('ENTENDENDO...')
+    setStatusText(audioLimiteAtingido ? 'PROCESSANDO LOCAL...' : 'ENTENDENDO...')
 
     try {
       // Tenta Skip Cloud Agent se online e autenticado, para diálogo e semântica
       let skipAgentIntent: any = null
       let skipAgentReplyText: string | null = null
+      let skipAgentActions: any[] | null = null
 
-      if (navigator.onLine && pb.authStore.isValid) {
+      // Se o limite de áudio foi ultrapassado, não consulta o Skip Cloud Agent na nuvem
+      if (!audioLimiteAtingido && navigator.onLine && pb.authStore.isValid) {
         try {
           const res = await fetch(`${pb.baseUrl}/backend/v1/interpret`, {
             method: 'POST',
@@ -182,6 +227,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             body: JSON.stringify({
               message: text,
               conversation_id: conversationId || undefined,
+              audio_seconds: duracaoSegundos,
             }),
           })
           if (res.ok) {
@@ -193,6 +239,9 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             if (data?.intent) {
               skipAgentIntent = data.intent
             }
+            if (data?.actions && Array.isArray(data.actions)) {
+              skipAgentActions = data.actions
+            }
             if (data?.content && typeof data.content === 'string') {
               skipAgentReplyText = data.content.trim()
             }
@@ -200,6 +249,127 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         } catch {
           // Degradação graciosa: fallback local imediato se offline ou erro
         }
+      }
+
+      // Se houver múltiplas ações retornadas pela IA (Fala composta - Melhoria 2):
+      // Processa cada ação e gera cards visuais coloridos compactos
+      if (skipAgentActions && skipAgentActions.length > 0) {
+        const cardsGerados: CardAcaoItem[] = []
+        const titulosResumo: string[] = []
+
+        for (let i = 0; i < skipAgentActions.length; i++) {
+          const acao = skipAgentActions[i]
+          const actionType = acao.type || acao.tipo || 'acao'
+          const intentName = acao.intent || ''
+          const params = acao.params || {}
+
+          if (actionType === 'material' || intentName.includes('estoque')) {
+            const mat = params.material || 'Material'
+            const qtd = params.quantidade || 1
+            const un = params.unidade || 'un'
+
+            // Atualiza localmente o estoque
+            const todosMats = await localDB.getAll('materiais_estoque')
+            const existente = todosMats.find((m) =>
+              m.nome.toLowerCase().includes(mat.toLowerCase()),
+            )
+            if (existente) {
+              await mutateEntity('materiais_estoque', 'update', {
+                ...existente,
+                quantidade: existente.quantidade + qtd,
+              })
+            } else {
+              await mutateEntity('materiais_estoque', 'create', {
+                id: 'mat_' + Date.now() + '_' + i,
+                owner_id: pb.authStore.model?.id || 'local_user',
+                nome: mat,
+                quantidade: qtd,
+                unidade: un as any,
+                estoque_minimo: 5,
+              })
+            }
+
+            cardsGerados.push({
+              id: `card_mat_${i}`,
+              tipo: 'material',
+              titulo: 'Material Registrado',
+              resumo: `${qtd} ${un} de ${mat}`,
+              status: 'sucesso',
+              icone: 'package',
+              ttsTexto: `Material: ${qtd} ${un} de ${mat} adicionado ao estoque.`,
+            })
+            titulosResumo.push(`🟩 Material: ${qtd} ${un} de ${mat}`)
+          } else if (actionType === 'ocorrencia' || intentName.includes('diario')) {
+            const serv = params.servico || params.ocorrencia || 'Ocorrência registrada'
+            const obs = params.observacao || params.textoCompleto || text
+            const obras = await localDB.getAll('obras')
+            const obraAlvo = obras[0]
+            await localDB.put('diario_obra', {
+              id: 'dia_' + Date.now() + '_' + i,
+              owner_id: 'local_user',
+              obra_id: obraAlvo ? obraAlvo.id : 'obra_padrao',
+              data: new Date().toISOString(),
+              servico: serv,
+              quantidade: params.quantidade || 0,
+              observacoes: obs,
+            })
+
+            cardsGerados.push({
+              id: `card_oco_${i}`,
+              tipo: 'ocorrencia',
+              titulo: 'Ocorrência de Obra',
+              resumo: serv,
+              detalhe: obs !== serv ? obs : undefined,
+              status: 'erro', // Vermelho para ocorrência/falta/problema
+              icone: 'alert-triangle',
+              ttsTexto: `Ocorrência: ${serv}.`,
+            })
+            titulosResumo.push(`🟥 Ocorrência: ${serv}`)
+          } else if (
+            actionType === 'financeiro' ||
+            intentName.includes('saida') ||
+            intentName.includes('entrada')
+          ) {
+            const val = params.valor || 0
+            const desc = params.descricao || 'Despesa'
+            const tipoFin = intentName.includes('entrada') ? 'entrada' : 'saida'
+            await mutateEntity('financeiro', 'create', {
+              id: 'fin_' + Date.now() + '_' + i,
+              owner_id: pb.authStore.model?.id || 'local_user',
+              tipo: tipoFin,
+              categoria: params.categoria || 'outros',
+              descricao: desc,
+              valor: val,
+              data: new Date().toISOString().split('T')[0],
+              status: 'pago',
+            })
+
+            cardsGerados.push({
+              id: `card_fin_${i}`,
+              tipo: 'financeiro',
+              titulo: tipoFin === 'entrada' ? 'Recebimento' : 'Despesa Registrada',
+              resumo: `R$ ${val.toFixed(2)} — ${desc}`,
+              status: 'aviso',
+              icone: 'dollar-sign',
+              ttsTexto: `Financeiro: ${tipoFin === 'entrada' ? 'Recebido' : 'Gasto'} R$ ${val.toFixed(2)} com ${desc}.`,
+            })
+            titulosResumo.push(`🟨 Financeiro: R$ ${val.toFixed(2)} (${desc})`)
+          }
+        }
+
+        const assistantMsg: ChatInteraction = {
+          id: 'resp_' + Date.now(),
+          autor: 'ajudante',
+          texto:
+            skipAgentReplyText ||
+            `Entendido! Identifiquei e processei ${cardsGerados.length} ações nesta fala:`,
+          tipoCalculo: 'EXATO',
+          timestamp: Date.now(),
+          cardsAcao: cardsGerados,
+        }
+
+        setInteractions((prev) => [...prev, assistantMsg])
+        return
       }
 
       // 1. SE HOUVER FLUXO DE ORÇAMENTO ATIVO, INTERCEPTA PASSOS DO DIÁLOGO GUIADO
@@ -501,6 +671,24 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (skipAgentIntent?.intent && parsed.confidence < 0.8) {
         parsed.intent = skipAgentIntent.intent
         parsed.params = { ...skipAgentIntent, ...parsed.params }
+      }
+
+      // Se limite de áudio foi atingido, inclui aviso explicativo caso usuário fale algo não reconhecido localmente
+      if (audioLimiteAtingido && !parsed.intent) {
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'limite_audio_' + Date.now(),
+            autor: 'ajudante',
+            texto: `${checagemAudio.mensagemBloqueio}\n\nDica: você ainda pode usar a calculadora manual ou falar comandos diretos como "calcula parede de 5 por 3".`,
+            tipoCalculo: 'TECNICA',
+            timestamp: Date.now(),
+            detalhes: {
+              sugestoes: ['Calcula parede de 5 por 3', 'Quanto de reboco?', 'Ver Planos'],
+            },
+          },
+        ])
+        return
       }
 
       // 3. Se for comando de DESFAZER

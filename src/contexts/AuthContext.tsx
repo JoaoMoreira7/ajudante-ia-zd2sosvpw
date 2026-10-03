@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import pb from '@/lib/pocketbase/client'
 import { localDB } from '@/lib/localDB'
-import { Assinatura, ConfiguracoesApp, PlanoTipo } from '@/types/database'
+import { Assinatura, ConfiguracoesApp, PlanoTipo, UserProfile } from '@/types/database'
 
 export type AppMode = 'simples' | 'profissional' | 'economico'
 export type FontSize = 'p' | 'm' | 'g'
@@ -44,6 +44,8 @@ interface AuthContextType {
   ) => Promise<{ success: boolean; error?: string }>
   assinatura: Assinatura | null
   planoAtivo: PlanoTipo
+  plano: PlanoTipo
+  profile: UserProfile | null
   isTrial: boolean
   logout: () => void
   refreshUserData: () => Promise<void>
@@ -81,6 +83,8 @@ const AuthContext = createContext<AuthContextType>({
   signup: async () => ({ success: false }),
   assinatura: null,
   planoAtivo: 'essencial',
+  plano: 'essencial',
+  profile: null,
   isTrial: false,
   logout: () => {},
   refreshUserData: async () => {},
@@ -422,7 +426,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         motivoBloqueio,
         assinatura,
         planoAtivo,
+        plano: planoAtivo,
         isTrial,
+        profile: user as any,
         isAuthenticated: Boolean(user || token),
         isLoading,
         config,

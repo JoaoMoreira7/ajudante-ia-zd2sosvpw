@@ -37,6 +37,7 @@ export function useVoiceHybrid() {
   const [transcript, setTranscript] = useState('')
   const [interimTranscript, setInterimTranscript] = useState('')
   const [speechError, setSpeechError] = useState<string | null>(null)
+  const recordingStartTimeRef = useRef<number | null>(null)
 
   const recognitionRef = useRef<any>(null)
 
@@ -97,6 +98,7 @@ export function useVoiceHybrid() {
     setSpeechError(null)
     setTranscript('')
     setInterimTranscript('')
+    recordingStartTimeRef.current = Date.now()
 
     if (recognitionRef.current) {
       try {
@@ -109,7 +111,13 @@ export function useVoiceHybrid() {
     }
   }, [])
 
-  const stopListening = useCallback(() => {
+  const stopListening = useCallback((): number => {
+    let durationSeconds = 3
+    if (recordingStartTimeRef.current) {
+      durationSeconds = Math.max(1, (Date.now() - recordingStartTimeRef.current) / 1000)
+      recordingStartTimeRef.current = null
+    }
+
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop()
@@ -118,6 +126,7 @@ export function useVoiceHybrid() {
       }
       setIsListening(false)
     }
+    return durationSeconds
   }, [])
 
   // Sintetizador de voz pt-BR claro e calmo, sem jargão

@@ -21,6 +21,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle, AlertCircle, Calendar, ChevronRight, CheckCircle2 } from 'lucide-react'
+import { WalkieTalkieButton } from '@/components/WalkieTalkieButton'
+import { ActionCardList } from '@/components/ActionCardList'
+import { useVoiceContext } from '@/contexts/VoiceContext'
+import { useVoiceHybrid } from '@/hooks/useVoiceHybrid'
+import { obterConsumoAudio, formatarMinutosESegundos } from '@/lib/audioUsageTracker'
+import { obterLimitesPlano } from '@/lib/planLimits'
 
 interface AlertaItem {
   id: string
@@ -33,14 +39,29 @@ interface AlertaItem {
 }
 
 export const Dashboard: React.FC = () => {
-  const { user, config, isDono, isOperador } = useAuth()
+  const { user, config, isDono, isOperador, plano, profile } = useAuth()
   const navigate = useNavigate()
+  const { interactions, isProcessing, processUserInput } = useVoiceContext()
+  const { speakText, stopSpeaking } = useVoiceHybrid()
 
   const [obras, setObras] = useState<Obra[]>([])
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([])
   const [financeiro, setFinanceiro] = useState<FinanceiroLancamento[]>([])
   const [documentos, setDocumentos] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [consumoAudio, setConsumoAudio] = useState(() => obterConsumoAudio(profile?.id))
+
+  const limites = obterLimitesPlano(plano)
+
+  const handleWalkieSend = async (text: string, durationSeconds: number) => {
+    stopSpeaking()
+    await processUserInput(text, durationSeconds)
+    setConsumoAudio(obterConsumoAudio(profile?.id))
+  }
+
+  // Última resposta da IA para exibir cards coloridos na tela principal se houver
+  const ultimaInteracao = interactions.length > 0 ? interactions[interactions.length - 1] : null
+  const ultimosCards = ultimaInteracao?.autor === 'ajudante' ? ultimaInteracao.cardsAcao : null
 
   useEffect(() => {
     const loadData = async () => {
@@ -196,31 +217,67 @@ export const Dashboard: React.FC = () => {
           </p>
         </div>
 
-        {/* Botão Gigante FALAR (mínimo 144px de altura) */}
-        <Link
-          to="/falar"
-          className="w-full h-40 sm:h-48 rounded-3xl bg-primary text-primary-foreground font-black text-2xl sm:text-3xl flex flex-col items-center justify-center gap-3 shadow-xl hover:bg-primary/95 active:scale-[0.98] transition-all pulse-falar"
-        >
-          <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center">
-            <Mic className="w-10 h-10" />
-          </div>
-          <span>🎙️ APERTE E FALE</span>
-        </Link>
+        {/* Botão Central Walkie-Talkie no Modo Simples (Melhoria 2) */}
+        <div className="p-4 rounded-3xl bg-card border-2 border-primary/40 shadow-md">
+          <WalkieTalkieButton
+            onSendMessage={handleWalkieSend}
+            isProcessing={isProcessing}
+            disabled={false}
+            isSimpleMode={true}
+          />
+        </div>
 
-        {/* Atalhos grandes no Modo Simples */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Confirmação em cards coloridos na tela se houver retorno recente */}
+        {ultimosCards && ultimosCards.length > 0 && (
+          <div className="p-4 rounded-2xl bg-card border border-border shadow-xs">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-black uppercase text-primary">
+                Resultado Reconhecido:
+              </span>
+              <button
+                type="button"
+                onClick={() => navigate('/falar')}
+                className="text-xs font-bold text-primary underline"
+              >
+                Abrir conversa completa
+              </button>
+            </div>
+            <ActionCardList
+              cards={ultimosCards}
+              onSpeak={(tts) => speakText(tts)}
+              isSimpleMode={true}
+            />
+          </div>
+        )}
+
+        {/* Atalhos diretos de 1 clique no Modo Simples (regra de 2 cliques) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Link
             to="/obras"
-            className="h-24 rounded-2xl bg-muted/80 border-2 border-border flex items-center justify-center gap-3 text-lg font-bold text-foreground hover:bg-muted"
+            className="h-24 rounded-2xl bg-muted/80 border-2 border-border flex flex-col items-center justify-center gap-1.5 text-base font-bold text-foreground hover:bg-muted text-center p-2"
           >
-            <HardHat className="w-8 h-8 text-primary" />
-            <span>Minhas Obras ({totalObras})</span>
+            <HardHat className="w-7 h-7 text-primary" />
+            <span>Obras ({totalObras})</span>
+          </Link>
+          <Link
+            to="/materiais"
+            className="h-24 rounded-2xl bg-muted/80 border-2 border-border flex flex-col items-center justify-center gap-1.5 text-base font-bold text-foreground hover:bg-muted text-center p-2"
+          >
+            <Package className="w-7 h-7 text-amber-500" />
+            <span>Materiais</span>
+          </Link>
+          <Link
+            to="/financeiro"
+            className="h-24 rounded-2xl bg-muted/80 border-2 border-border flex flex-col items-center justify-center gap-1.5 text-base font-bold text-foreground hover:bg-muted text-center p-2"
+          >
+            <DollarSign className="w-7 h-7 text-emerald-600" />
+            <span>Gastos</span>
           </Link>
           <Link
             to="/calculadora"
-            className="h-24 rounded-2xl bg-muted/80 border-2 border-border flex items-center justify-center gap-3 text-lg font-bold text-foreground hover:bg-muted"
+            className="h-24 rounded-2xl bg-muted/80 border-2 border-border flex flex-col items-center justify-center gap-1.5 text-base font-bold text-foreground hover:bg-muted text-center p-2"
           >
-            <Calculator className="w-8 h-8 text-primary" />
+            <Calculator className="w-7 h-7 text-primary" />
             <span>Calculadora</span>
           </Link>
         </div>
@@ -296,29 +353,67 @@ export const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Saudação e Botão FALAR Principal */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-card to-muted/40 border border-border shadow-xs">
-        <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider mb-1.5">
+      {/* Saudação, Contador de Uso de Áudio e Walkie-Talkie Central (Melhoria 2) */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-card to-muted/40 border border-border shadow-xs">
+        <div className="space-y-1">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider mb-1">
             <Sparkles className="w-3 h-3" />
             <span>2 horas de papelada viram 15 minutos de fala</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
             Olá, {nomeExibicao}!
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Pare de preencher planilha. Fale e pronto.
+          <p className="text-sm text-muted-foreground">
+            Aperte o botão, fale tudo o que aconteceu e solte. A IA faz o resto.
           </p>
+
+          <div className="flex items-center gap-2 pt-2 text-xs font-semibold text-muted-foreground">
+            <Clock className="w-3.5 h-3.5 text-primary" />
+            <span>
+              Uso de voz este mês:{' '}
+              <strong className="text-foreground">
+                {formatarMinutosESegundos(consumoAudio.segundosUsados)}
+              </strong>{' '}
+              de{' '}
+              {limites.maxMinutosAudioMes === -1
+                ? 'Ilimitado'
+                : `${limites.maxMinutosAudioMes} min`}
+            </span>
+          </div>
         </div>
 
-        <Link
-          to="/falar"
-          className="h-24 sm:h-16 px-6 rounded-2xl bg-primary text-primary-foreground font-bold text-lg flex items-center justify-center gap-3 shadow-md hover:bg-primary/95 active:scale-95 transition-all pulse-falar text-center"
-        >
-          <Mic className="w-7 h-7 shrink-0" />
-          <span>FALAR COM AJUDANTE</span>
-        </Link>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <WalkieTalkieButton
+            onSendMessage={handleWalkieSend}
+            isProcessing={isProcessing}
+            disabled={false}
+            isSimpleMode={false}
+          />
+        </div>
       </div>
+
+      {/* Confirmação recente em cards coloridos na tela principal (Melhoria 2) */}
+      {ultimosCards && ultimosCards.length > 0 && (
+        <div className="p-4 rounded-2xl bg-card border-2 border-primary/30 shadow-xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-black uppercase text-primary tracking-wider">
+              Último Comando Processado:
+            </span>
+            <button
+              type="button"
+              onClick={() => navigate('/falar')}
+              className="text-xs font-bold text-primary hover:underline cursor-pointer"
+            >
+              Ver no Chat Completo →
+            </button>
+          </div>
+          <ActionCardList
+            cards={ultimosCards}
+            onSpeak={(tts) => speakText(tts)}
+            isSimpleMode={false}
+          />
+        </div>
+      )}
 
       {/* Cards Resumo com Dados Reais do Banco (Modo Dono: financeiro completo; Modo Operador: etapas e obras) */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">

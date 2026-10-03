@@ -15,9 +15,15 @@ import {
   Sparkles,
   RefreshCw,
   Info,
+  Clock,
+  Sparkle,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { WalkieTalkieButton } from '@/components/WalkieTalkieButton'
+import { ActionCardList } from '@/components/ActionCardList'
+import { obterConsumoAudio, formatarMinutosESegundos } from '@/lib/audioUsageTracker'
+import { obterLimitesPlano } from '@/lib/planLimits'
 
 export const Falar: React.FC = () => {
   const {
@@ -44,14 +50,19 @@ export const Falar: React.FC = () => {
     speechError,
   } = useVoiceHybrid()
 
-  const { config, isOperador } = useAuth()
+  const { config, isOperador, plano, profile } = useAuth()
 
   const [inputText, setInputText] = useState('')
   const [ttsEnabled, setTtsEnabled] = useState<boolean>(() => {
     return config?.voz_respostas !== false
   })
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine)
+  const [consumoAudio, setConsumoAudio] = useState(() => obterConsumoAudio(profile?.id))
+  const [modoEntrada, setModoEntrada] = useState<'walkie' | 'teclado'>('walkie')
   const chatBottomRef = useRef<HTMLDivElement>(null)
+
+  const limites = obterLimitesPlano(plano)
+  const minutosUsados = consumoAudio.segundosUsados / 60
 
   // Monitorar conectividade de rede
   useEffect(() => {
@@ -70,12 +81,19 @@ export const Falar: React.FC = () => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [interactions, isProcessing])
 
-  // Ao encerrar a fala, envia para o interpretador
+  // Ao encerrar a fala pelo botão secundário, envia para o interpretador
   useEffect(() => {
     if (transcript && !isListening) {
-      processUserInput(transcript)
+      processUserInput(transcript, 4)
+      setConsumoAudio(obterConsumoAudio(profile?.id))
     }
-  }, [transcript, isListening, processUserInput])
+  }, [transcript, isListening, processUserInput, profile?.id])
+
+  const handleWalkieSend = (text: string, durationSeconds: number) => {
+    stopSpeaking()
+    processUserInput(text, durationSeconds)
+    setConsumoAudio(obterConsumoAudio(profile?.id))
+  }
 
   // Leitura em voz alta automática (TTS) de toda resposta do assistente (essencial para quem não lê)
   useEffect(() => {
@@ -130,6 +148,21 @@ export const Falar: React.FC = () => {
                 ? 'Você fala e o Ajudante responde com voz clara e contas certas.'
                 : 'Chat inteligente com voz, motor determinístico e precisão nos números.'}
             </p>
+            {/* Contador discreto de minutos de áudio consumidos no mês */}
+            <div className="flex items-center gap-1.5 mt-1 text-[11px] font-semibold text-muted-foreground">
+              <Clock className="w-3 h-3 text-primary" />
+              <span>
+                Voz:{' '}
+                <strong className="text-foreground">
+                  {formatarMinutosESegundos(consumoAudio.segundosUsados)}
+                </strong>{' '}
+                de{' '}
+                {limites.maxMinutosAudioMes === -1
+                  ? 'Ilimitado'
+                  : `${limites.maxMinutosAudioMes} min`}{' '}
+                este mês
+              </span>
+            </div>
           </div>
         </div>
 
@@ -257,6 +290,26 @@ export const Falar: React.FC = () => {
                   {msg.texto}
                 </div>
 
+                {/* MELHORIA 2: Confirmação visual em cards coloridos compactos por item reconhecido */}
+                {msg.cardsAcao && msg.cardsAcao.length > 0 && (
+                  <ActionCardList
+                    cards={msg.cardsAcao}
+                    onSpeak={(tts) => speakText(tts)}
+                    isSimpleMode={isModoSimples}
+                  />
+                )}
+
+                {/* Feedback de jargão técnico corrigido */}
+                {msg.detalhes?.correcoesGlossario && msg.detalhes.correcoesGlossario.length > 0 && (
+                  <div className="text-[11px] text-muted-foreground bg-muted/30 px-2.5 py-1 rounded-md flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3 text-primary" />
+                    <span>
+                      Jargão de obra identificado:{' '}
+                      {msg.detalhes.correcoesGlossario.map((c) => c.termoDetectado).join(', ')}
+                    </span>
+                  </div>
+                )}
+
                 {/* Fórmula exata se houver */}
                 {msg.detalhes?.formula && (
                   <div className="p-3 rounded-xl bg-muted/60 font-mono text-xs sm:text-sm font-bold text-foreground border border-border/50">
@@ -377,50 +430,62 @@ export const Falar: React.FC = () => {
         </div>
       )}
 
-      {/* Área Inferior: Botão Gigante de Microfone + Campo de Texto Acessível */}
-      <div className="shrink-0 pt-3 space-y-2">
-        {/* Botão de Microfone de Alto Destaque */}
-        <button
-          type="button"
-          onClick={handleMicToggle}
-          className={`w-full py-3.5 sm:py-4 px-4 rounded-2xl font-black text-base sm:text-lg flex items-center justify-center gap-3 transition-all cursor-pointer shadow-lg ${
-            isListening
-              ? 'bg-destructive text-destructive-foreground ring-4 ring-destructive/30 animate-pulse'
-              : 'bg-primary text-primary-foreground hover:bg-primary/95 active:scale-[0.99] pulse-falar'
-          }`}
-        >
-          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-            <Mic className="w-5 h-5" />
+      {/* Área Inferior: Botão Walkie-Talkie Principal + Alternância Rápida para Teclado */}
+      <div className="shrink-0 pt-2 space-y-2">
+        {modoEntrada === 'walkie' ? (
+          <div className="bg-card border border-border/80 rounded-2xl p-2 shadow-sm">
+            <WalkieTalkieButton
+              onSendMessage={handleWalkieSend}
+              isProcessing={isProcessing}
+              disabled={false}
+              isSimpleMode={isModoSimples}
+            />
+            <div className="text-center pb-1">
+              <button
+                type="button"
+                onClick={() => setModoEntrada('teclado')}
+                className="text-xs text-muted-foreground hover:text-foreground font-semibold underline cursor-pointer"
+              >
+                Prefere digitar? Abrir teclado
+              </button>
+            </div>
           </div>
-          <span>
-            {isListening ? 'OUVINDO SUA VOZ... TOQUE PARA ENVIAR' : '🎙️ TOQUE PARA FALAR COM A IA'}
-          </span>
-        </button>
+        ) : (
+          <div className="bg-card border border-border/80 rounded-2xl p-3 shadow-sm space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-muted-foreground">Digitar mensagem:</span>
+              <button
+                type="button"
+                onClick={() => setModoEntrada('walkie')}
+                className="text-xs text-primary font-bold flex items-center gap-1 hover:underline cursor-pointer"
+              >
+                <Mic className="w-3.5 h-3.5" />
+                Voltar para o Walkie-Talkie
+              </button>
+            </div>
 
-        {/* Entrada de Texto com letras grandes para acessibilidade */}
-        <form onSubmit={handleSendText} className="flex gap-2">
-          <input
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder={
-              isSupported
-                ? 'Ou digite sua pergunta (ex: Parede de 6 por 2,80)...'
-                : 'Digite sua pergunta ou medida:'
-            }
-            className={`flex-1 h-12 sm:h-13 px-4 rounded-xl border border-input bg-card font-medium focus:outline-hidden focus:ring-2 focus:ring-primary shadow-xs ${
-              isModoSimples ? 'text-base sm:text-lg' : 'text-sm sm:text-base'
-            }`}
-          />
-          <Button
-            type="submit"
-            disabled={!inputText.trim() || isProcessing}
-            className="h-12 sm:h-13 px-5 sm:px-6 font-black rounded-xl text-sm sm:text-base cursor-pointer"
-          >
-            <Send className="w-4 h-4 mr-1.5" />
-            Enviar
-          </Button>
-        </form>
+            {/* Entrada de Texto com letras grandes para acessibilidade */}
+            <form onSubmit={handleSendText} className="flex gap-2">
+              <input
+                type="text"
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder="Ex: Parede de 6 por 2,80 ou Chegou 50 saco de cimento..."
+                className={`flex-1 h-12 sm:h-13 px-4 rounded-xl border border-input bg-card font-medium focus:outline-hidden focus:ring-2 focus:ring-primary shadow-xs ${
+                  isModoSimples ? 'text-base sm:text-lg' : 'text-sm sm:text-base'
+                }`}
+              />
+              <Button
+                type="submit"
+                disabled={!inputText.trim() || isProcessing}
+                className="h-12 sm:h-13 px-5 sm:px-6 font-black rounded-xl text-sm sm:text-base cursor-pointer"
+              >
+                <Send className="w-4 h-4 mr-1.5" />
+                Enviar
+              </Button>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   )

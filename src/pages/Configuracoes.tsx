@@ -10,6 +10,8 @@ import {
   Shield,
   LogOut,
   CreditCard,
+  Clock,
+  Radio,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -17,12 +19,23 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { obterConsumoAudio, formatarMinutosESegundos } from '@/lib/audioUsageTracker'
+import { obterLimitesPlano } from '@/lib/planLimits'
 
 export const Configuracoes: React.FC = () => {
-  const { config, updateConfig, setModo, setPerfil, perfil, user, logout, planoAtivo } = useAuth()
+  const { config, updateConfig, setModo, setPerfil, perfil, user, logout, planoAtivo, profile } =
+    useAuth()
   const [nome, setNome] = useState(config?.nome_profissional || '')
   const [empresa, setEmpresa] = useState((config as any)?.empresa || config?.nome_empresa || '')
   const [salvo, setSalvo] = useState(false)
+  const [consumoAudio] = useState(() => obterConsumoAudio(profile?.id))
+
+  const limites = obterLimitesPlano(planoAtivo)
+  const minutosUsados = consumoAudio.segundosUsados / 60
+  const pctUso =
+    limites.maxMinutosAudioMes === -1
+      ? 0
+      : Math.min(100, Math.round((minutosUsados / limites.maxMinutosAudioMes) * 100))
 
   const handleSalvarPerfil = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -60,7 +73,7 @@ export const Configuracoes: React.FC = () => {
         </div>
       </div>
 
-      {/* Cartão de Assinatura e Planos */}
+      {/* Cartão de Assinatura, Planos e Controle de Uso de Áudio (Melhoria 3) */}
       <Card className="border-primary/20 bg-primary/5">
         <CardContent className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -74,11 +87,11 @@ export const Configuracoes: React.FC = () => {
             </h3>
             <p className="text-xs text-muted-foreground mt-1">
               {planoAtivo === 'essencial' &&
-                'Até 5 clientes, 2 obras simultâneas, 10 orçamentos/mês e cálculos completos de construção.'}
+                'Até 5 clientes, 2 obras simultâneas, 60 min de IA de voz/mês e cálculos completos de construção.'}
               {planoAtivo === 'profissional' &&
-                'Clientes, obras e orçamentos ilimitados, emissão de PDF timbrado e diário por voz.'}
+                'Até 10 obras ativas simultâneas, 300 min de IA de voz/mês, emissão de PDF e diário com fotos.'}
               {planoAtivo === 'empresa' &&
-                'Gestão corporativa, até 5 usuários de equipe, relatórios consolidados e suporte prioritário.'}
+                'Equipes (dono + ajudantes), áudio por IA ilimitado, relatórios consolidados e múltiplas obras.'}
             </p>
           </div>
           <Link to="/planos" className="shrink-0">
@@ -87,6 +100,60 @@ export const Configuracoes: React.FC = () => {
               Ver Planos e Upgrades
             </Button>
           </Link>
+        </CardContent>
+      </Card>
+
+      {/* MELHORIA 3: Contador de uso de voz visível e renovado mensalmente */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-bold flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-primary" />
+              Consumo de Minutos de Áudio / IA por Voz
+            </span>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+              Ciclo {consumoAudio.cicloMesAno}
+            </span>
+          </CardTitle>
+          <CardDescription>
+            Limite mensal alinhado ao plano para processamento em nuvem. Os cálculos determinísticos
+            e registros offline <strong>nunca são bloqueados</strong>.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="p-4 rounded-xl bg-muted/40 border space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-bold text-foreground flex items-center gap-2">
+                <Radio className="w-4 h-4 text-emerald-600 animate-pulse" />
+                Voz: {formatarMinutosESegundos(consumoAudio.segundosUsados)} de{' '}
+                {limites.maxMinutosAudioMes === -1
+                  ? 'Ilimitado'
+                  : `${limites.maxMinutosAudioMes} minutos este mês`}
+              </span>
+              <span className="text-xs font-bold text-muted-foreground">
+                {consumoAudio.totalComandosVoz} comandos falados
+              </span>
+            </div>
+
+            {limites.maxMinutosAudioMes !== -1 && (
+              <div className="space-y-1">
+                <div className="w-full bg-border h-3 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      pctUso >= 90 ? 'bg-destructive' : pctUso >= 70 ? 'bg-amber-500' : 'bg-primary'
+                    }`}
+                    style={{ width: `${pctUso}%` }}
+                  />
+                </div>
+                <div className="flex justify-between text-[11px] text-muted-foreground font-semibold">
+                  <span>{pctUso}% utilizado</span>
+                  <span>
+                    Resta: {Math.max(0, limites.maxMinutosAudioMes - Math.round(minutosUsados))} min
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

@@ -34,6 +34,7 @@ export const CATALOGO_PLANOS: CatalogoPlano[] = [
       maxClientes: 5,
       maxObrasSimultaneas: 2,
       maxOrcamentosMes: 10,
+      maxMinutosAudioMes: 60, // 60 minutos/mês de IA por voz
       permitePdfDocumentos: false,
       permiteDiarioVoz: false,
       permiteFotosObra: false,
@@ -46,8 +47,8 @@ export const CATALOGO_PLANOS: CatalogoPlano[] = [
       modulosSobMedida: false,
     },
     recursos: [
-      'Voz + texto (comandos por voz no canteiro, botão FALAR)',
-      'Calculadora de obra completa (área, volume, perímetro, conversões)',
+      'Voz + texto (60 minutos de IA por voz por mês no canteiro)',
+      'Calculadora de obra completa (cálculos exatos NUNCA bloqueados)',
       'Cálculos de construção (alvenaria, reboco, contrapiso, concreto, piso, pintura, telhado)',
       'Clientes: até 5 cadastrados',
       'Obras: até 2 simultâneas em andamento',
@@ -61,14 +62,16 @@ export const CATALOGO_PLANOS: CatalogoPlano[] = [
     id: 'profissional',
     nome: 'Plano Profissional',
     badge: 'Mais Popular',
-    descricao: 'Clientes e obras ilimitados, emissão de documentos PDF, diário por voz e fotos.',
+    descricao:
+      'Mais obras ativas (até 10), 300 min de áudio, documentos PDF, diário por voz e fotos.',
     precoMensal: 49.9,
     precoAnual: 499.0, // ~2 meses grátis
     destaque: true,
     limites: {
       maxClientes: -1, // ilimitado
-      maxObrasSimultaneas: -1, // ilimitado
+      maxObrasSimultaneas: 10, // até 10 obras ativas simultâneas
       maxOrcamentosMes: -1, // ilimitado
+      maxMinutosAudioMes: 300, // 300 minutos/mês de IA por voz (5 horas)
       permitePdfDocumentos: true,
       permiteDiarioVoz: true,
       permiteFotosObra: true,
@@ -82,8 +85,9 @@ export const CATALOGO_PLANOS: CatalogoPlano[] = [
     },
     recursos: [
       'Tudo do Plano Essencial, e mais:',
-      'Clientes, obras e orçamentos ILIMITADOS',
-      'Documentos PDF: orçamento, recibo, ordem de serviço, lista de materiais',
+      'Até 10 obras simultâneas em andamento e clientes ilimitados',
+      '300 minutos/mês de processamento de áudio por IA',
+      'Documentos PDF: orçamento, recibo, ordem de serviço, lista de materiais prontos para WhatsApp',
       'Diário de obra por voz no canteiro',
       'Registro fotográfico por obra e por etapa (com geolocalização)',
       'Estoque completo + lista de compras automática',
@@ -96,13 +100,14 @@ export const CATALOGO_PLANOS: CatalogoPlano[] = [
     nome: 'Plano Empresa',
     badge: 'Completo',
     descricao:
-      'Para construtoras e empreiteiros com equipe, indicadores avançados e suporte direto.',
+      'Para construtoras e empreiteiros com equipes (dono + ajudantes), múltiplas obras e áudio ilimitado.',
     precoMensal: 79.9,
     precoAnual: 799.0, // ~2 meses grátis
     limites: {
       maxClientes: -1,
-      maxObrasSimultaneas: -1,
+      maxObrasSimultaneas: -1, // ilimitado
       maxOrcamentosMes: -1,
+      maxMinutosAudioMes: -1, // ilimitado
       permitePdfDocumentos: true,
       permiteDiarioVoz: true,
       permiteFotosObra: true,
@@ -116,9 +121,10 @@ export const CATALOGO_PLANOS: CatalogoPlano[] = [
     },
     recursos: [
       'Tudo do Plano Profissional, e mais:',
-      'Equipes: até 5 usuários (perfis dono e operador) na mesma conta',
-      'Relatórios avançados + indicadores (Modo Profissional completo: custos, lucro, produtividade)',
-      'Gestão de múltiplas obras simultâneas com visão consolidada',
+      'Equipes: até 5 usuários (dono + ajudantes/operadores) na mesma conta',
+      'Transcrições de áudio por IA ILIMITADAS',
+      'Relatórios consolidados de múltiplas obras e indicadores de margem',
+      'Gestão ilimitada de obras simultâneas',
       'Suporte prioritário via WhatsApp direto com time sênior',
       'Módulos liberados sob medida pelo administrador comercial',
     ],
