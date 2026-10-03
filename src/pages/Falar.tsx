@@ -164,14 +164,25 @@ export const Falar: React.FC = () => {
   }
 
   // Leitura em voz alta automática (TTS) de toda resposta do assistente (essencial para quem não lê)
+  // Executado em micro-task para garantir que o texto já esteja completamente renderizado na tela antes do sintetizador falar
+  const lastSpokenInteractionIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (ttsEnabled && interactions.length > 0) {
+    if (ttsEnabled && interactions.length > 0 && !isProcessing) {
       const last = interactions[interactions.length - 1]
-      if (last.autor === 'ajudante' && last.texto) {
-        speakText(last.texto)
+      if (
+        last.autor === 'ajudante' &&
+        last.texto &&
+        lastSpokenInteractionIdRef.current !== last.id
+      ) {
+        lastSpokenInteractionIdRef.current = last.id
+        // Deixa a renderização do DOM completar no próximo frame antes de disparar o áudio
+        const timer = setTimeout(() => {
+          speakText(last.texto)
+        }, 120)
+        return () => clearTimeout(timer)
       }
     }
-  }, [interactions, ttsEnabled, speakText])
+  }, [interactions, isProcessing, ttsEnabled, speakText])
 
   const handleMicToggle = () => {
     if (isListening) {

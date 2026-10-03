@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useVoiceContext } from '@/contexts/VoiceContext'
 import { useVoiceHybrid } from '@/hooks/useVoiceHybrid'
 import { X, Mic, Send, AlertTriangle, CheckCircle, RotateCcw } from 'lucide-react'
@@ -45,14 +45,20 @@ export const VoiceOverlay: React.FC<VoiceOverlayProps> = ({ isOpen, onClose }) =
   }, [transcript, isListening, processUserInput])
 
   // Se a última resposta for do ajudante, sintetiza voz pt-BR se overlay estiver aberto
+  // Dispara após a renderização do texto na tela
+  const lastOverlaySpokenIdRef = useRef<string | null>(null)
   useEffect(() => {
-    if (isOpen && interactions.length > 0) {
+    if (isOpen && interactions.length > 0 && !isProcessing) {
       const last = interactions[interactions.length - 1]
-      if (last.autor === 'ajudante' && last.texto) {
-        speakText(last.texto)
+      if (last.autor === 'ajudante' && last.texto && lastOverlaySpokenIdRef.current !== last.id) {
+        lastOverlaySpokenIdRef.current = last.id
+        const timer = setTimeout(() => {
+          speakText(last.texto)
+        }, 120)
+        return () => clearTimeout(timer)
       }
     }
-  }, [isOpen, interactions, speakText])
+  }, [isOpen, interactions, isProcessing, speakText])
 
   if (!isOpen) return null
 

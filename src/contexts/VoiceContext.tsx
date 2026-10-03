@@ -226,15 +226,42 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsProcessing(true)
     setStatusText(audioLimiteAtingido ? 'PROCESSANDO LOCAL...' : 'ENTENDENDO...')
 
+    // 0. ANÁLISE LOCAL PRÉVIA IMEDIATA:
+    // Se o usuário estiver no meio de um diálogo de orçamento guiado ou se a intenção
+    // for identificada com alta confiança local (desfazer, medidas matemáticas determinísticas diretas),
+    // podemos processar localmente em milissegundos sem aguardar round-trip de rede desnecessário!
+    const isFluxoOrcamentoAtivo =
+      contextData.fluxoAtivo === 'orcamento' && !!contextData.dialogoOrcamento
+    const parsedLocalPrevio: ParsedIntent = parseLocalIntent(text, contextData)
+    const isComandoUltraRapidoLocal =
+      parsedLocalPrevio.intent === 'acao_desfazer' ||
+      (parsedLocalPrevio.confidence >= 0.88 &&
+        (parsedLocalPrevio.intent === 'calc_area' ||
+          parsedLocalPrevio.intent === 'calc_alvenaria' ||
+          parsedLocalPrevio.intent === 'calc_reboco' ||
+          parsedLocalPrevio.intent === 'calc_piso' ||
+          parsedLocalPrevio.intent === 'descontar_abertura' ||
+          parsedLocalPrevio.intent === 'aritmetica_simples'))
+
     try {
       // Tenta Skip Cloud Agent se online e autenticado, para diálogo e semântica
       let skipAgentIntent: any = null
       let skipAgentReplyText: string | null = null
       let skipAgentActions: any[] | null = null
 
-      // Se o limite de áudio foi ultrapassado, não consulta o Skip Cloud Agent na nuvem
-      if (!audioLimiteAtingido && navigator.onLine && pb.authStore.isValid) {
+      // Se não for fluxo local guiado de orçamento e o limite de áudio não foi atingido,
+      // consulta o Skip Cloud Agent com timeout controlado de 8s (evita travar o usuário no celular 3G/4G)
+      if (
+        !isFluxoOrcamentoAtivo &&
+        !isComandoUltraRapidoLocal &&
+        !audioLimiteAtingido &&
+        navigator.onLine &&
+        pb.authStore.isValid
+      ) {
         try {
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 8000)
+
           const res = await fetch(`${pb.baseUrl}/backend/v1/interpret`, {
             method: 'POST',
             headers: {
@@ -246,7 +273,10 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               conversation_id: conversationId || undefined,
               audio_seconds: duracaoSegundos,
             }),
+            signal: controller.signal,
           })
+          clearTimeout(timeoutId)
+
           if (res.ok) {
             const data = await res.json()
             if (data?.conversation_id) {
@@ -264,7 +294,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             }
           }
         } catch {
-          // Degradação graciosa: fallback local imediato se offline ou erro
+          // Degradação graciosa: fallback local imediato se offline, timeout ou erro
         }
       }
 
