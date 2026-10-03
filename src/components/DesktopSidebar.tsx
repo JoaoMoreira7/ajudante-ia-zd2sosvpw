@@ -88,9 +88,11 @@ export const DesktopSidebar: React.FC<SidebarProps> = ({ onOpenVoice }) => {
       {/* Caixa de status do sistema */}
       <div className="mt-auto pt-4 border-t border-border">
         <div className="p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
-          <p className="font-semibold text-foreground">Ajudante IA v0.0.2</p>
+          <p className="font-semibold text-foreground">Ajudante IA v0.0.18</p>
           <p className="text-[11px] mt-0.5">100% Funcional Offline</p>
-          <p className="text-[10px] text-muted-foreground/80 mt-1">Motor determinístico ativo</p>
+          <p className="text-[10px] text-muted-foreground/80 mt-1">
+            Busca de conversas e cálculos ativa
+          </p>
         </div>
       </div>
     </aside>

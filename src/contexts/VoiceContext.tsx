@@ -18,6 +18,12 @@ import { ReversibleAction } from '@/types/database'
 import { normalizarJargaoObra } from '@/lib/obraGlossary'
 import { obterConsumoAudio, registrarUsoAudio } from '@/lib/audioUsageTracker'
 import { verificarLimiteAudioMinutos } from '@/lib/planLimits'
+import {
+  carregarChatPersistido,
+  salvarChatPersistido,
+  limparChatPersistido,
+  registrarCalculoPersistente,
+} from '@/lib/historicoStorage'
 
 export type CardAcaoTipo = 'material' | 'ocorrencia' | 'financeiro' | 'calculo' | 'aviso'
 
@@ -95,22 +101,33 @@ const VoiceContext = createContext<VoiceContextType>({} as any)
 
 export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { config, isOperador, assinatura, plano, isTrial, profile } = useAuth()
-  const [interactions, setInteractions] = useState<ChatInteraction[]>([
-    {
-      id: 'welcome',
-      autor: 'ajudante',
-      texto: 'Olá! Sou o Ajudante IA. Você fala e eu entendo, calculo e organizo.',
-      timestamp: Date.now(),
-      detalhes: {
-        sugestoes: [
-          'Calcula uma parede de 8 por 3',
-          'Tira a porta de 80 por 210',
-          'Quanto de piso preciso para 30 metros?',
-          'Registra uma saída de 350 reais de material',
-        ],
+  const [interactions, setInteractions] = useState<ChatInteraction[]>(() => {
+    const salvos = carregarChatPersistido(profile?.id)
+    if (salvos && salvos.length > 0) {
+      return salvos
+    }
+    return [
+      {
+        id: 'welcome',
+        autor: 'ajudante',
+        texto: 'Olá! Sou o Ajudante IA. Você fala e eu entendo, calculo e organizo.',
+        timestamp: Date.now(),
+        detalhes: {
+          sugestoes: [
+            'Calcula uma parede de 8 por 3',
+            'Tira a porta de 80 por 210',
+            'Quanto de piso preciso para 30 metros?',
+            'Registra uma saída de 350 reais de material',
+          ],
+        },
       },
-    },
-  ])
+    ]
+  })
+
+  // Sincroniza persistência offline sempre que interactions mudar
+  React.useEffect(() => {
+    salvarChatPersistido(interactions, profile?.id || 'local_user')
+  }, [interactions, profile?.id])
   const [conversationId, setConversationId] = useState<string | null>(() => {
     return localStorage.getItem('ajudante_chat_conv_id') || null
   })
@@ -146,8 +163,8 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setContextData({ perdaPct: 10, aberturas: [] })
     setConversationId(null)
     localStorage.removeItem('ajudante_chat_conv_id')
-    setInteractions((prev) => [
-      ...prev,
+    limparChatPersistido(profile?.id)
+    setInteractions([
       {
         id: 'ctx_clear_' + Date.now(),
         autor: 'ajudante',
@@ -162,7 +179,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         },
       },
     ])
-  }, [])
+  }, [profile?.id])
 
   const processUserInput = async (rawInput: string, audioDurationSeconds: number = 0) => {
     const textOriginal = rawInput.trim()
@@ -650,6 +667,26 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             `*ORÇAMENTO: ${orcSalvo.titulo}*\nTotal: R$ ${calcFinal.valor.total.toFixed(2)}\nSinal: R$ ${(dlg.sinal || 0).toFixed(2)}\nCondições: ${parcelasText}\n\nJC Construções`,
           )}`
 
+          registrarCalculoPersistente({
+            owner_id: profile?.id || 'local_user',
+            titulo: `Orçamento de ${dlg.servico.toUpperCase()} (${dlg.area} m²)`,
+            tipoCalculo: 'EXATO',
+            categoria: 'orcamento',
+            parametrosEntrada: {
+              servico: dlg.servico,
+              area: dlg.area,
+              precoM2: dlg.precoM2,
+              sinal: dlg.sinal,
+              parcelas: parcelasCount,
+            },
+            resumoEntrada: `${dlg.servico} (${dlg.area} m²), mão de obra R$ ${dlg.precoM2 || 50}/m²`,
+            resumoResultado: `Total: R$ ${calcFinal.valor.total.toFixed(2)} | Sinal: R$ ${(dlg.sinal || 0).toFixed(2)} | ${parcelasText}`,
+            formula: calcFinal.formula,
+            passos: calcFinal.passos,
+            ttsTexto: `Orçamento criado com sucesso: ${dlg.servico} de ${dlg.area} metros quadrados, valor total de ${calcFinal.valor.total.toFixed(2)} reais.`,
+            origem: 'orcamento',
+          })
+
           setInteractions((prev) => [
             ...prev,
             {
@@ -938,6 +975,20 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           'E quanto de reboco?',
         ]
 
+        registrarCalculoPersistente({
+          owner_id: profile?.id || 'local_user',
+          titulo: `Cálculo de Área de Parede (${comp}m × ${alt}m)`,
+          tipoCalculo: 'EXATO',
+          categoria: 'area',
+          parametrosEntrada: { comprimento: comp, altura: alt },
+          resumoEntrada: `Parede de ${comp}m de comprimento por ${alt}m de altura`,
+          resumoResultado: `Área total: ${res.valor} m²`,
+          formula: res.formula,
+          passos: res.passos,
+          ttsTexto: `Cálculo de área: ${comp} por ${alt} dá ${res.valor} metros quadrados.`,
+          origem: 'falar',
+        })
+
         setContextData((prev) => ({
           ...prev,
           comprimento: comp,
@@ -963,6 +1014,25 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         tipoBadge = 'EXATO'
         sugestoes = ['Quanto de bloco?', 'Quanto de reboco?', 'Faz o orçamento']
 
+        registrarCalculoPersistente({
+          owner_id: profile?.id || 'local_user',
+          titulo: `Área com Desconto de Vão (${pLarg}m × ${pAlt}m)`,
+          tipoCalculo: 'EXATO',
+          categoria: 'area',
+          parametrosEntrada: {
+            comprimento: comp,
+            altura: alt,
+            descontoLargura: pLarg,
+            descontoAltura: pAlt,
+          },
+          resumoEntrada: `Parede ${comp}m × ${alt}m com desconto de ${pLarg}m × ${pAlt}m`,
+          resumoResultado: `Área líquida: ${res.valor.areaLiquida} m² (descontou ${res.valor.areaAberturas} m²)`,
+          formula: res.formula,
+          passos: res.passos,
+          ttsTexto: `Descontando o vão de ${pLarg} por ${pAlt}, a área líquida ficou em ${res.valor.areaLiquida} metros quadrados.`,
+          origem: 'falar',
+        })
+
         setContextData((prev) => ({
           ...prev,
           areaLiquida: res.valor.areaLiquida,
@@ -975,9 +1045,10 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         tipoBadge = 'EXATO'
       } else if (parsed.intent === 'calc_alvenaria') {
         const area = contextData.areaLiquida || contextData.areaBruta || parsed.params.areaM2 || 20
+        const perda = contextData.perdaPct || 10
         const res = MathEngine.calcularAlvenaria({
           areaM2: area,
-          perdaPct: contextData.perdaPct || 10,
+          perdaPct: perda,
         })
         respostaTexto = `QUANTIDADE DE ALVENARIA para ${area} m²:\n• ${res.valor.quantidadeBlocos} blocos cerâmicos (14x19x29)\n• ~${res.valor.cimentoKg} kg de cimento\n• ~${res.valor.areiaM3} m³ de areia`
         formula = res.formula
@@ -985,27 +1056,74 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         aviso = res.aviso
         tipoBadge = 'ESTIMATIVA'
         sugestoes = ['E quanto de reboco?', 'Faz o orçamento', 'Baixa 10 sacos de cimento']
+
+        registrarCalculoPersistente({
+          owner_id: profile?.id || 'local_user',
+          titulo: `Cálculo de Alvenaria (${area} m²)`,
+          tipoCalculo: 'ESTIMATIVA',
+          categoria: 'alvenaria',
+          parametrosEntrada: { areaM2: area, perdaPct: perda },
+          resumoEntrada: `${area} m² de parede, margem de ${perda}%`,
+          resumoResultado: `${res.valor.quantidadeBlocos} blocos cerâmicos (14x19x29), ~${res.valor.cimentoKg} kg cimento e ~${res.valor.areiaM3} m³ areia`,
+          formula: res.formula,
+          passos: res.passos,
+          aviso: res.aviso,
+          ttsTexto: `Alvenaria para ${area} metros quadrados: ${res.valor.quantidadeBlocos} blocos cerâmicos, cerca de ${Math.ceil(res.valor.cimentoKg / 50)} sacos de cimento e ${res.valor.areiaM3} metros cúbicos de areia.`,
+          origem: 'falar',
+        })
       } else if (parsed.intent === 'calc_reboco') {
         const area = contextData.areaLiquida || contextData.areaBruta || parsed.params.areaM2 || 20
+        const perda = contextData.perdaPct || 10
         const res = MathEngine.calcularReboco({
           areaM2: area,
           espessuraCm: 2,
-          perdaPct: contextData.perdaPct || 10,
+          perdaPct: perda,
         })
         respostaTexto = `REBOCO para ${area} m² (2 cm espessura):\n• ~${res.valor.cimentoSacos50kg} sacos de cimento (50kg)\n• ~${res.valor.calSacos20kg} sacos de cal\n• ~${res.valor.areiaM3} m³ de areia média`
         formula = res.formula
         passos = res.passos
         aviso = res.aviso
         tipoBadge = 'ESTIMATIVA'
+
+        registrarCalculoPersistente({
+          owner_id: profile?.id || 'local_user',
+          titulo: `Cálculo de Reboco (${area} m²)`,
+          tipoCalculo: 'ESTIMATIVA',
+          categoria: 'reboco',
+          parametrosEntrada: { areaM2: area, espessuraCm: 2, perdaPct: perda },
+          resumoEntrada: `${area} m² a rebocar (2 cm espessura, traço padrão)`,
+          resumoResultado: `~${res.valor.cimentoSacos50kg} sacos cimento, ~${res.valor.calSacos20kg} sacos cal e ~${res.valor.areiaM3} m³ areia média`,
+          formula: res.formula,
+          passos: res.passos,
+          aviso: res.aviso,
+          ttsTexto: `Reboco para ${area} metros quadrados: cerca de ${res.valor.cimentoSacos50kg} sacos de cimento, ${res.valor.calSacos20kg} sacos de cal e ${res.valor.areiaM3} metros cúbicos de areia média.`,
+          origem: 'falar',
+        })
       } else if (parsed.intent === 'calc_piso') {
         const area = parsed.params.areaM2 || 30
-        const res = MathEngine.calcularPiso({ areaM2: area, perdaPct: contextData.perdaPct || 10 })
+        const perda = contextData.perdaPct || 10
+        const res = MathEngine.calcularPiso({ areaM2: area, perdaPct: perda })
         respostaTexto = `REVESTIMENTO/PISO para ${area} m²:\n• ${res.valor.areaTotalComPerda} m² de piso com 10% perda (${res.valor.caixasPiso} caixas)\n• ~${res.valor.argamassaColanteSacos20kg} sacos de argamassa colante\n• ~${res.valor.rejunteKg} kg de rejunte`
         formula = res.formula
         passos = res.passos
         aviso = res.aviso
         tipoBadge = 'ESTIMATIVA'
         sugestoes = ['Faz o orçamento', 'Adicionar aos materiais']
+
+        registrarCalculoPersistente({
+          owner_id: profile?.id || 'local_user',
+          titulo: `Cálculo de Piso e Revestimento (${area} m²)`,
+          tipoCalculo: 'ESTIMATIVA',
+          categoria: 'piso',
+          parametrosEntrada: { areaM2: area, perdaPct: perda },
+          resumoEntrada: `${area} m² de piso com ${perda}% de perda`,
+          resumoResultado: `${res.valor.areaTotalComPerda} m² (${res.valor.caixasPiso} caixas), ~${res.valor.argamassaColanteSacos20kg} sacos argamassa e ~${res.valor.rejunteKg} kg rejunte`,
+          formula: res.formula,
+          passos: res.passos,
+          aviso: res.aviso,
+          ttsTexto: `Piso para ${area} metros: ${res.valor.areaTotalComPerda} metros quadrados com folga, total de ${res.valor.caixasPiso} caixas, ${res.valor.argamassaColanteSacos20kg} sacos de argamassa e ${res.valor.rejunteKg} quilos de rejunte.`,
+          origem: 'falar',
+        })
       } else if (parsed.intent === 'aritmetica_simples') {
         respostaTexto = `Resultado: ${parsed.params.n1} ${parsed.params.op} ${parsed.params.n2} = ${parsed.params.resultado}`
         formula = `${parsed.params.n1} ${parsed.params.op} ${parsed.params.n2} = ${parsed.params.resultado}`

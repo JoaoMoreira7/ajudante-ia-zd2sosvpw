@@ -17,6 +17,11 @@ import {
   Info,
   Clock,
   Sparkle,
+  Search,
+  X,
+  ArrowDownCircle,
+  Layers,
+  MessageSquare,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -28,6 +33,8 @@ import {
   calcularEstadoConsumoAudio,
 } from '@/lib/audioUsageTracker'
 import { obterLimitesPlano } from '@/lib/planLimits'
+import { buscarNoHistorico, ItemResultadoBuscaUnificada } from '@/lib/historicoStorage'
+import { useSearchParams } from 'react-router-dom'
 
 export const Falar: React.FC = () => {
   const {
@@ -55,6 +62,7 @@ export const Falar: React.FC = () => {
   } = useVoiceHybrid()
 
   const { config, isOperador, plano, profile } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [inputText, setInputText] = useState('')
   const [ttsEnabled, setTtsEnabled] = useState<boolean>(() => {
@@ -63,7 +71,15 @@ export const Falar: React.FC = () => {
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine)
   const [consumoAudio, setConsumoAudio] = useState(() => obterConsumoAudio(profile?.id))
   const [modoEntrada, setModoEntrada] = useState<'walkie' | 'teclado'>('walkie')
+
+  // Estado da busca unificada (conversas e cálculos)
+  const [termoBusca, setTermoBusca] = useState<string>(() => searchParams.get('busca') || '')
+  const [buscaAtiva, setBuscaAtiva] = useState<boolean>(() => !!searchParams.get('busca'))
+  const [resultadosBusca, setResultadosBusca] = useState<ItemResultadoBuscaUnificada[]>([])
+  const [itemDestacadoId, setItemDestacadoId] = useState<string | null>(null)
+
   const chatBottomRef = useRef<HTMLDivElement>(null)
+  const buscaInputRef = useRef<HTMLInputElement>(null)
 
   const limites = obterLimitesPlano(plano)
   const minutosUsados = consumoAudio.segundosUsados / 60
@@ -80,10 +96,58 @@ export const Falar: React.FC = () => {
     }
   }, [])
 
-  // Auto-scroll ao receber nova mensagem
+  // Executa busca sempre que o termo mudar ou as interactions forem atualizadas
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [interactions, isProcessing])
+    if (!termoBusca.trim()) {
+      setResultadosBusca([])
+      return
+    }
+    const res = buscarNoHistorico(termoBusca, {
+      interactions,
+      userId: profile?.id,
+      isOperador,
+    })
+    setResultadosBusca(res)
+  }, [termoBusca, interactions, profile?.id, isOperador])
+
+  // Se veio parâmetro de busca na URL, foca o input
+  useEffect(() => {
+    const q = searchParams.get('busca')
+    if (q) {
+      setTermoBusca(q)
+      setBuscaAtiva(true)
+      setTimeout(() => {
+        buscaInputRef.current?.focus()
+      }, 100)
+    }
+  }, [searchParams])
+
+  // Auto-scroll ao receber nova mensagem (apenas se busca não estiver ativa com rolagem)
+  useEffect(() => {
+    if (!termoBusca.trim()) {
+      chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [interactions, isProcessing, termoBusca])
+
+  const rolarAteMensagem = (msgId?: string) => {
+    if (!msgId) return
+    const el = document.getElementById(`chat-msg-${msgId}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setItemDestacadoId(msgId)
+      setTimeout(() => setItemDestacadoId(null), 3500)
+    }
+  }
+
+  const limparBusca = () => {
+    setTermoBusca('')
+    setResultadosBusca([])
+    setSearchParams((prev) => {
+      const n = new URLSearchParams(prev)
+      n.delete('busca')
+      return n
+    })
+  }
 
   // Ao encerrar a fala pelo botão secundário, envia para o interpretador
   useEffect(() => {
@@ -194,6 +258,24 @@ export const Falar: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Botão de abrir/fechar Busca no Histórico */}
+          <Button
+            type="button"
+            variant={buscaAtiva ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              setBuscaAtiva(!buscaAtiva)
+              if (!buscaAtiva) {
+                setTimeout(() => buscaInputRef.current?.focus(), 80)
+              }
+            }}
+            title="Buscar em conversas e cálculos anteriores"
+            className="h-9 px-3 rounded-xl text-xs font-bold gap-1.5 cursor-pointer shadow-xs"
+          >
+            <Search className="w-4 h-4" />
+            <span>Buscar</span>
+          </Button>
+
           {/* Botão de alternar leitura em voz alta (TTS) */}
           <Button
             type="button"
@@ -228,7 +310,7 @@ export const Falar: React.FC = () => {
             variant="ghost"
             size="sm"
             onClick={clearContext}
-            title="Começar uma nova conversa"
+            title="Começar uma nova conversa e limpar histórico de tela"
             className="h-9 px-2.5 rounded-xl text-xs text-muted-foreground hover:text-foreground font-semibold gap-1"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -236,6 +318,198 @@ export const Falar: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* CAMPO FIXO DE BUSCA NO TOPO DO HISTÓRICO (TELA FALAR) */}
+      {buscaAtiva && (
+        <div className="shrink-0 mb-3 p-3 sm:p-4 rounded-2xl bg-card border-2 border-primary/40 shadow-sm space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Search className="w-4 h-4 text-primary" />
+              <span className="text-xs sm:text-sm font-black uppercase text-foreground">
+                Buscar no que já conversamos ou calculamos
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                limparBusca()
+                setBuscaAtiva(false)
+              }}
+              className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 p-1 rounded-md"
+            >
+              <X className="w-4 h-4" />
+              <span className="hidden sm:inline">Fechar</span>
+            </button>
+          </div>
+
+          <div className="relative">
+            <input
+              ref={buscaInputRef}
+              type="text"
+              value={termoBusca}
+              onChange={(e) => setTermoBusca(e.target.value)}
+              placeholder="Buscar no que já conversamos... (ex: cimento, parede, 24m, piso)"
+              className={`w-full h-12 sm:h-13 pl-11 pr-10 rounded-xl border-2 border-border bg-background font-medium focus:outline-hidden focus:border-primary shadow-inner ${
+                isModoSimples ? 'text-base sm:text-lg' : 'text-sm sm:text-base'
+              }`}
+            />
+            <Search className="w-5 h-5 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            {termoBusca && (
+              <button
+                type="button"
+                onClick={limparBusca}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Dica amigável e atalhos rápidos de busca para quem tem baixa leitura */}
+          {!termoBusca && (
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
+                Toques rápidos para encontrar fácil:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {['cimento', 'parede', 'bloco', 'piso', 'reboco', 'concreto', 'areia'].map(
+                  (tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => setTermoBusca(tag)}
+                      className="text-xs px-3 py-1.5 rounded-full bg-muted hover:bg-primary/10 hover:text-primary font-bold border border-border transition-colors cursor-pointer"
+                    >
+                      🔍 {tag}
+                    </button>
+                  ),
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* RESULTADOS DA BUSCA EM TEMPO REAL */}
+          {termoBusca.trim() && (
+            <div className="space-y-2 pt-2 border-t border-border">
+              <div className="flex items-center justify-between text-xs font-bold text-muted-foreground">
+                <span>
+                  {resultadosBusca.length === 0
+                    ? 'Nenhum resultado'
+                    : `${resultadosBusca.length} item(s) encontrado(s)`}
+                </span>
+                <span className="text-[11px] font-medium">Ignora acentos e maiúsculas</span>
+              </div>
+
+              {resultadosBusca.length === 0 ? (
+                <div className="p-4 sm:p-5 rounded-xl bg-muted/40 border border-dashed border-border text-center space-y-2">
+                  <p className="text-base sm:text-lg font-black text-foreground">
+                    Não achei nada com essa palavra.
+                  </p>
+                  <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto">
+                    Tente falar de outro jeito ou confira se escreveu com outra palavraparecida
+                    (como "parede", "bloco" ou "cimento").
+                  </p>
+                </div>
+              ) : (
+                <div className="max-h-64 sm:max-h-80 overflow-y-auto space-y-2.5 pr-1">
+                  {resultadosBusca.map((item) => (
+                    <div
+                      key={item.id}
+                      className="p-3 sm:p-3.5 rounded-xl bg-background border border-border hover:border-primary/50 shadow-xs transition-all space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`p-1.5 rounded-lg text-xs font-black flex items-center gap-1 ${
+                              item.tipoItem === 'calculo'
+                                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+                                : item.tipoItem === 'conversa_usuario'
+                                  ? 'bg-primary/15 text-primary'
+                                  : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                            }`}
+                          >
+                            {item.tipoItem === 'calculo' ? (
+                              <>
+                                <Calculator className="w-3.5 h-3.5" />
+                                <span>CÁLCULO</span>
+                              </>
+                            ) : item.tipoItem === 'conversa_usuario' ? (
+                              <>
+                                <MessageSquare className="w-3.5 h-3.5" />
+                                <span>VOCÊ DISSE</span>
+                              </>
+                            ) : (
+                              <>
+                                <Sparkle className="w-3.5 h-3.5" />
+                                <span>AJUDANTE IA</span>
+                              </>
+                            )}
+                          </span>
+                          <span className="text-xs font-bold text-foreground line-clamp-1">
+                            {item.titulo}
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                          {item.subtitulo}
+                        </span>
+                      </div>
+
+                      {item.detalhe && (
+                        <p className="text-xs text-muted-foreground font-medium bg-muted/30 px-2.5 py-1 rounded-md">
+                          <strong>Entrada:</strong> {item.detalhe}
+                        </p>
+                      )}
+
+                      <p
+                        className={`font-semibold text-foreground leading-snug ${
+                          isModoSimples ? 'text-sm sm:text-base' : 'text-xs sm:text-sm'
+                        }`}
+                      >
+                        {item.conteudoPrincipal}
+                      </p>
+
+                      {item.formula && (
+                        <div className="text-[11px] font-mono text-primary bg-primary/5 px-2 py-1 rounded-md">
+                          📐 {item.formula}
+                        </div>
+                      )}
+
+                      {/* Ações acessíveis do item: Rolar até mensagem ou Ouvir em voz alta */}
+                      <div className="flex items-center justify-between pt-1 border-t border-border/50 gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => speakText(item.ttsTexto)}
+                          className="h-8 px-2.5 rounded-lg text-xs font-bold text-primary hover:bg-primary/10 gap-1.5 cursor-pointer"
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                          <span>Ouvir resumo</span>
+                        </Button>
+
+                        {item.origemId && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              rolarAteMensagem(item.origemId)
+                            }}
+                            className="h-8 px-2.5 rounded-lg text-xs font-bold gap-1 cursor-pointer"
+                          >
+                            <ArrowDownCircle className="w-3.5 h-3.5" />
+                            <span>Ver na conversa</span>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Aviso de Operador ou Aviso de Offline */}
       {!isOnline && (
@@ -262,14 +536,17 @@ export const Falar: React.FC = () => {
       <div className="flex-1 overflow-y-auto space-y-4 p-3 sm:p-4 rounded-2xl bg-card/60 border border-border shadow-inner">
         {interactions.map((msg) => (
           <div
+            id={`chat-msg-${msg.id}`}
             key={msg.id}
-            className={`flex flex-col ${msg.autor === 'usuario' ? 'items-end' : 'items-start'}`}
+            className={`flex flex-col transition-all duration-300 ${
+              itemDestacadoId === msg.id ? 'ring-4 ring-primary ring-offset-2 rounded-3xl' : ''
+            } ${msg.autor === 'usuario' ? 'items-end' : 'items-start'}`}
           >
             {msg.autor === 'usuario' ? (
               <div
                 className={`max-w-[85%] sm:max-w-[80%] p-3.5 sm:p-4 rounded-3xl rounded-br-xs bg-primary text-primary-foreground font-semibold shadow-xs ${
                   isModoSimples ? 'text-base sm:text-lg' : 'text-sm sm:text-base'
-                }`}
+                } ${itemDestacadoId === msg.id ? 'bg-primary/90 shadow-lg' : ''}`}
               >
                 <div className="text-[11px] font-black uppercase tracking-wider opacity-85 mb-1 flex items-center gap-1">
                   <span>VOCÊ DISSE:</span>

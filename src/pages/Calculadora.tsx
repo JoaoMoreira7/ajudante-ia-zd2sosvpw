@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dialog'
 import { mutateEntity } from '@/lib/syncService'
 import pb from '@/lib/pocketbase/client'
+import { registrarCalculoPersistente } from '@/lib/historicoStorage'
 
 export const Calculadora: React.FC = () => {
   // 1. ÁREA
@@ -136,6 +137,30 @@ export const Calculadora: React.FC = () => {
     const res = MathEngine.gerarEstimativaMateriais(servico, medida, perda)
     setListaMateriaisModal(res.valor)
     setListaSalvaSucesso(false)
+
+    // Registra cálculo para a busca do cliente
+    try {
+      const resumoItens = res.valor.itens
+        .slice(0, 4)
+        .map((it) => `${it.nome}: ${it.quantidade} ${it.unidade}`)
+        .join(', ')
+      registrarCalculoPersistente({
+        owner_id: pb.authStore.model?.id || 'local_user',
+        titulo: `Lista de Materiais - ${servico.toUpperCase()} (${medida} ${res.valor.unidadeMedida})`,
+        tipoCalculo: 'ESTIMATIVA',
+        categoria: servico as any,
+        parametrosEntrada: { servico, medida, perda },
+        resumoEntrada: `${medida} ${res.valor.unidadeMedida} de ${servico} com ${perda}% perda`,
+        resumoResultado: resumoItens,
+        formula: res.formula,
+        passos: res.passos,
+        aviso: res.aviso,
+        ttsTexto: `Estimativa de materiais para ${servico} de ${medida} ${res.valor.unidadeMedida}: ${resumoItens}`,
+        origem: 'calculadora',
+      })
+    } catch {
+      // no-op
+    }
   }
 
   const salvarListaNosDocumentos = async () => {

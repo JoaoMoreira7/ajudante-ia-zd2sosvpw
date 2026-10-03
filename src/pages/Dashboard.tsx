@@ -16,6 +16,7 @@ import {
   TrendingUp,
   Clock,
   Sparkles,
+  Search,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -265,6 +266,27 @@ export const Dashboard: React.FC = () => {
             />
           </div>
         )}
+
+        {/* Atalho Grande: Buscar o que já fiz (Regra dos 2 cliques / Acessibilidade) */}
+        <Link
+          to="/falar?busca=1"
+          className="p-4 sm:p-5 rounded-3xl bg-primary/10 border-2 border-primary/40 flex items-center justify-between gap-3 text-left hover:bg-primary/15 transition-all shadow-xs"
+        >
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center shrink-0 shadow-xs">
+              <Search className="w-6 h-6" />
+            </div>
+            <div>
+              <span className="text-base sm:text-lg font-black text-foreground block">
+                Buscar o que já fiz
+              </span>
+              <p className="text-xs sm:text-sm text-muted-foreground font-medium">
+                Encontre conversas, medidas e contas de cimento, tijolo e piso
+              </p>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-primary shrink-0" />
+        </Link>
 
         {/* Atalhos diretos de 1 clique no Modo Simples (regra de 2 cliques) */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -601,10 +623,29 @@ export const Dashboard: React.FC = () => {
 
       {/* Grade de Ações Rápidas */}
       <div>
-        <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">
-          Ações Rápidas
-        </h2>
-        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
+            Ações Rápidas
+          </h2>
+          <Link
+            to="/falar?busca=1"
+            className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span>Buscar histórico</span>
+          </Link>
+        </div>
+        <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 sm:gap-3">
+          <Link
+            to="/falar?busca=1"
+            className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-xl bg-primary/10 border-2 border-primary/30 hover:border-primary hover:bg-primary/15 transition-all text-center group"
+          >
+            <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center mb-2 group-hover:scale-110 transition-transform shadow-xs">
+              <Search className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-black text-foreground">Buscar</span>
+          </Link>
+
           <Link
             to="/calculadora"
             className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-xl bg-card border border-border hover:border-primary hover:bg-primary/5 transition-all text-center group"
