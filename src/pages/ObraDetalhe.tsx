@@ -50,6 +50,7 @@ export const ObraDetalhe: React.FC = () => {
   const [clienteObra, setClienteObra] = useState<any>(null)
   const [diarios, setDiarios] = useState<DiarioObra[]>([])
   const [fotos, setFotos] = useState<DocumentoObra[]>([])
+  const [carregando, setCarregando] = useState(true)
   const [dialogDiarioAberto, setDialogDiarioAberto] = useState(false)
   const [dialogFotoAberto, setDialogFotoAberto] = useState(false)
   const [capturandoGeo, setCapturandoGeo] = useState(false)
@@ -84,26 +85,50 @@ export const ObraDetalhe: React.FC = () => {
   const [fotoDataHora, setFotoDataHora] = useState<string>('')
 
   const carregarDados = async () => {
-    if (!id) return
-    const ob = await localDB.getById('obras', id)
-    setObra(ob)
-    if (ob?.cliente_id) {
-      const cli = await localDB.getById('clientes', ob.cliente_id)
-      setClienteObra(cli)
+    if (!id) {
+      setCarregando(false)
+      return
     }
-    const todosDiarios = await localDB.getAll('diario_obra')
-    setDiarios(todosDiarios.filter((d) => d.obra_id === id))
-    const todosDocs = await localDB.getAll('documentos')
-    setFotos(
-      todosDocs
-        .filter((d) => d.obra_id === id && d.tipo === 'foto')
-        .sort((a, b) => new Date(b.created || 0).getTime() - new Date(a.created || 0).getTime()),
-    )
+    try {
+      const ob = await localDB.getById('obras', id)
+      setObra(ob || null)
+      if (ob?.cliente_id) {
+        const cli = await localDB.getById('clientes', ob.cliente_id)
+        setClienteObra(cli)
+      } else {
+        setClienteObra(null)
+      }
+      const todosDiarios = await localDB.getAll('diario_obra')
+      setDiarios(todosDiarios.filter((d) => d?.obra_id === id))
+      const todosDocs = await localDB.getAll('documentos')
+      setFotos(
+        todosDocs
+          .filter((d) => d?.obra_id === id && d?.tipo === 'foto')
+          .sort(
+            (a, b) => new Date(b?.created || 0).getTime() - new Date(a?.created || 0).getTime(),
+          ),
+      )
+    } catch (err) {
+      console.warn('Erro ao carregar obra:', err)
+    } finally {
+      setCarregando(false)
+    }
   }
 
   useEffect(() => {
     carregarDados()
   }, [id])
+
+  if (carregando) {
+    return (
+      <div className="p-12 text-center space-y-3">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-sm font-semibold text-muted-foreground">
+          Carregando detalhes da obra...
+        </p>
+      </div>
+    )
+  }
 
   if (!obra) {
     return (

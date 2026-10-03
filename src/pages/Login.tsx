@@ -75,11 +75,13 @@ export const Login: React.FC = () => {
               {carregando ? 'Entrando...' : 'Entrar'}
             </Button>
 
-            <div className="text-center text-xs text-muted-foreground pt-2">
-              Ainda não tem conta?{' '}
-              <Link to="/cadastro" className="font-bold text-primary hover:underline">
-                Cadastre-se gratuitamente
-              </Link>
+            <div className="text-center text-xs text-muted-foreground pt-2 space-y-1">
+              <div>
+                Não tem uma conta?{' '}
+                <Link to="/cadastro" className="font-bold text-primary hover:underline">
+                  Criar conta gratuitamente
+                </Link>
+              </div>
             </div>
           </form>
         </CardContent>

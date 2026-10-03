@@ -20,8 +20,8 @@ import { Switch } from '@/components/ui/switch'
 
 export const Configuracoes: React.FC = () => {
   const { config, updateConfig, setModo, setPerfil, perfil, user, logout, planoAtivo } = useAuth()
-  const [nome, setNome] = useState(config.nome_profissional || '')
-  const [empresa, setEmpresa] = useState(config.empresa || '')
+  const [nome, setNome] = useState(config?.nome_profissional || '')
+  const [empresa, setEmpresa] = useState((config as any)?.empresa || config?.nome_empresa || '')
   const [salvo, setSalvo] = useState(false)
 
   const handleSalvarPerfil = async (e: React.FormEvent) => {
@@ -254,8 +254,8 @@ export const Configuracoes: React.FC = () => {
               </span>
             </div>
             <Switch
-              checked={config.som_ativo}
-              onCheckedChange={(checked) => updateConfig({ som_ativo: checked })}
+              checked={Boolean(config?.voz_respostas || (config as any)?.som_ativo)}
+              onCheckedChange={(checked) => updateConfig({ voz_respostas: checked })}
             />
           </div>
 
@@ -267,7 +267,7 @@ export const Configuracoes: React.FC = () => {
               </span>
             </div>
             <Switch
-              checked={config.alto_contraste}
+              checked={Boolean(config?.alto_contraste)}
               onCheckedChange={(checked) => updateConfig({ alto_contraste: checked })}
             />
           </div>

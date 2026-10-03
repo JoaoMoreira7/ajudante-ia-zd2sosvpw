@@ -338,14 +338,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     try {
       if (navigator.onLine) {
-        await pb.collection('users').create({
-          email: email.trim(),
+        const newUser = await pb.collection('users').create({
+          email: email.trim().toLowerCase(),
           password: pass,
           passwordConfirm: pass,
           name: name.trim(),
           perfil,
-          status_conta: 'ativo',
+          status_conta: 'trial',
         })
+
+        // Cria assinatura inicial de trial de 7 dias se possível
+        try {
+          const agora = new Date()
+          const vencimentoTrial = new Date()
+          vencimentoTrial.setDate(agora.getDate() + 7)
+
+          await pb.collection('assinaturas').create({
+            user_id: newUser.id,
+            plano: perfil === 'operador' ? 'essencial' : 'profissional',
+            ciclo: 'mensal',
+            valor_recorrente: 0,
+            status: 'trial',
+            origem: 'internet',
+            data_inicio: agora.toISOString().split('T')[0],
+            proximo_vencimento: vencimentoTrial.toISOString().split('T')[0],
+            observacoes: 'Período de avaliação gratuita de 7 dias',
+          })
+        } catch (assErr) {
+          console.warn('Assinatura trial não pôde ser criada remotamente:', assErr)
+        }
+
         setPerfilAtivo(perfil)
         localStorage.setItem('ajudante_perfil_ativo', perfil)
         return await login(email, pass)
@@ -355,14 +377,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: email.trim(),
         name: name.trim(),
         perfil,
-        status_conta: 'ativo',
+        status_conta: 'trial',
       })
       setPerfilAtivo(perfil)
       localStorage.setItem('ajudante_perfil_ativo', perfil)
       setToken('local_token_' + Date.now())
       return { success: true }
     } catch (err: any) {
-      return { success: false, error: err?.message || 'Não foi possível cadastrar.' }
+      return {
+        success: false,
+        error: err?.message || 'Não foi possível cadastrar. Verifique os dados.',
+      }
     }
   }
 

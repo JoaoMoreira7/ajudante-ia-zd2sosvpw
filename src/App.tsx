@@ -4,6 +4,7 @@ import { AuthProvider } from '@/contexts/AuthContext'
 import { VoiceProvider } from '@/contexts/VoiceContext'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Layout from '@/components/Layout'
+import GlobalErrorBoundary from '@/components/GlobalErrorBoundary'
 
 // Páginas
 import Dashboard from '@/pages/Dashboard'
@@ -27,74 +28,56 @@ import Admin from '@/pages/Admin'
 import NotFound from '@/pages/NotFound'
 
 export default function App() {
-  // Garantir a remoção completa de qualquer badge ou elemento de atribuição "Criado com Skip"
+  // Garantir a remoção pontual de badges de atribuição sem loops pesados de DOM
   React.useEffect(() => {
     const removeSkipBadge = () => {
       const candidates = document.querySelectorAll<HTMLElement>(
-        '#skip-badge, .skip-badge, [data-skip-badge], [id*="skip-badge"], [class*="skip-badge"], a[href*="goskip.dev"], a[href*="skip.it"]',
+        '#skip-badge, .skip-badge, [data-skip-badge], a[href*="goskip.dev"], a[href*="skip.it"]',
       )
       candidates.forEach((el) => {
         el.remove()
       })
-
-      // Procura por qualquer elemento flutuante ou de rodapé cujo texto contenha "Criado com Skip", "Made with Skip" ou "Built with Skip"
-      const allElements = document.querySelectorAll<HTMLElement>('div, a, span, p, footer')
-      allElements.forEach((el) => {
-        const text = el.innerText?.toLowerCase().trim() || ''
-        if (
-          (text.includes('criado com skip') ||
-            text.includes('made with skip') ||
-            text.includes('built with skip')) &&
-          el.children.length <= 3
-        ) {
-          el.remove()
-        }
-      })
     }
 
     removeSkipBadge()
-    const interval = setInterval(removeSkipBadge, 1000)
-    const observer = new MutationObserver(() => removeSkipBadge())
-    observer.observe(document.body, { childList: true, subtree: true })
-
-    return () => {
-      clearInterval(interval)
-      observer.disconnect()
-    }
   }, [])
 
   return (
-    <AuthProvider>
-      <VoiceProvider>
-        <TooltipProvider>
-          <Router>
-            <Routes>
-              {/* Rotas principais com Layout comum (TopBar, BottomNav, Sidebar, VoiceOverlay) */}
-              <Route path="/" element={<Layout />}>
-                <Route index element={<Dashboard />} />
-                <Route path="falar" element={<Falar />} />
-                <Route path="calculadora" element={<Calculadora />} />
-                <Route path="clientes" element={<Clientes />} />
-                <Route path="clientes/:id" element={<ClienteDetalhe />} />
-                <Route path="obras" element={<Obras />} />
-                <Route path="obras/:id" element={<ObraDetalhe />} />
-                <Route path="orcamentos" element={<Orcamentos />} />
-                <Route path="orcamentos/novo" element={<OrcamentoNovo />} />
-                <Route path="orcamentos/:id" element={<OrcamentoDetalhe />} />
-                <Route path="financeiro" element={<Financeiro />} />
-                <Route path="materiais" element={<Materiais />} />
-                <Route path="ferramentas" element={<Ferramentas />} />
-                <Route path="configuracoes" element={<Configuracoes />} />
-                <Route path="planos" element={<Planos />} />
-                <Route path="admin" element={<Admin />} />
-                <Route path="login" element={<Login />} />
-                <Route path="cadastro" element={<Cadastro />} />
-                <Route path="*" element={<NotFound />} />
-              </Route>
-            </Routes>
-          </Router>
-        </TooltipProvider>
-      </VoiceProvider>
-    </AuthProvider>
+    <GlobalErrorBoundary>
+      <AuthProvider>
+        <VoiceProvider>
+          <TooltipProvider>
+            <Router>
+              <GlobalErrorBoundary>
+                <Routes>
+                  {/* Rotas principais com Layout comum (TopBar, BottomNav, Sidebar, VoiceOverlay) */}
+                  <Route path="/" element={<Layout />}>
+                    <Route index element={<Dashboard />} />
+                    <Route path="falar" element={<Falar />} />
+                    <Route path="calculadora" element={<Calculadora />} />
+                    <Route path="clientes" element={<Clientes />} />
+                    <Route path="clientes/:id" element={<ClienteDetalhe />} />
+                    <Route path="obras" element={<Obras />} />
+                    <Route path="obras/:id" element={<ObraDetalhe />} />
+                    <Route path="orcamentos" element={<Orcamentos />} />
+                    <Route path="orcamentos/novo" element={<OrcamentoNovo />} />
+                    <Route path="orcamentos/:id" element={<OrcamentoDetalhe />} />
+                    <Route path="financeiro" element={<Financeiro />} />
+                    <Route path="materiais" element={<Materiais />} />
+                    <Route path="ferramentas" element={<Ferramentas />} />
+                    <Route path="configuracoes" element={<Configuracoes />} />
+                    <Route path="planos" element={<Planos />} />
+                    <Route path="admin" element={<Admin />} />
+                    <Route path="login" element={<Login />} />
+                    <Route path="cadastro" element={<Cadastro />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Route>
+                </Routes>
+              </GlobalErrorBoundary>
+            </Router>
+          </TooltipProvider>
+        </VoiceProvider>
+      </AuthProvider>
+    </GlobalErrorBoundary>
   )
 }

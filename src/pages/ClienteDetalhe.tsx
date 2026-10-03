@@ -21,19 +21,41 @@ export const ClienteDetalhe: React.FC = () => {
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [obras, setObras] = useState<Obra[]>([])
   const [orcamentos, setOrcamentos] = useState<Orcamento[]>([])
+  const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
-    if (!id) return
+    if (!id) {
+      setCarregando(false)
+      return
+    }
     const loadData = async () => {
-      const cli = await localDB.getById('clientes', id)
-      setCliente(cli)
-      const allObras = await localDB.getAll('obras')
-      setObras(allObras.filter((o) => o.cliente_id === id))
-      const allOrcs = await localDB.getAll('orcamentos')
-      setOrcamentos(allOrcs.filter((orc) => orc.cliente_id === id))
+      setCarregando(true)
+      try {
+        const cli = await localDB.getById('clientes', id)
+        setCliente(cli || null)
+        const allObras = await localDB.getAll('obras')
+        setObras(allObras.filter((o) => o?.cliente_id === id))
+        const allOrcs = await localDB.getAll('orcamentos')
+        setOrcamentos(allOrcs.filter((orc) => orc?.cliente_id === id))
+      } catch (err) {
+        console.warn('Erro ao carregar cliente:', err)
+      } finally {
+        setCarregando(false)
+      }
     }
     loadData()
   }, [id])
+
+  if (carregando) {
+    return (
+      <div className="p-12 text-center space-y-3">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-sm font-semibold text-muted-foreground">
+          Carregando dados do cliente...
+        </p>
+      </div>
+    )
+  }
 
   if (!cliente) {
     return (

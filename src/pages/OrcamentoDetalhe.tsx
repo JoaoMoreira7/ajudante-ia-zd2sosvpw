@@ -27,16 +27,28 @@ export const OrcamentoDetalhe: React.FC = () => {
   const { id } = useParams<{ id: string }>()
   const [orcamento, setOrcamento] = useState<Orcamento | null>(null)
   const [cliente, setCliente] = useState<Cliente | null>(null)
+  const [carregando, setCarregando] = useState(true)
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
   const [upgradeMensagem, setUpgradeMensagem] = useState('')
 
   const carregarDados = async () => {
-    if (!id) return
-    const orc = await localDB.getById('orcamentos', id)
-    setOrcamento(orc)
-    if (orc?.cliente_id) {
-      const cli = await localDB.getById('clientes', orc.cliente_id)
-      setCliente(cli)
+    if (!id) {
+      setCarregando(false)
+      return
+    }
+    try {
+      const orc = await localDB.getById('orcamentos', id)
+      setOrcamento(orc || null)
+      if (orc?.cliente_id) {
+        const cli = await localDB.getById('clientes', orc.cliente_id)
+        setCliente(cli)
+      } else {
+        setCliente(null)
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar orçamento:', err)
+    } finally {
+      setCarregando(false)
     }
   }
 
@@ -58,6 +70,15 @@ export const OrcamentoDetalhe: React.FC = () => {
         <Link to="/obras">
           <Button className="font-bold">Voltar para Obras</Button>
         </Link>
+      </div>
+    )
+  }
+
+  if (carregando) {
+    return (
+      <div className="p-12 text-center space-y-3">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-sm font-semibold text-muted-foreground">Carregando orçamento...</p>
       </div>
     )
   }

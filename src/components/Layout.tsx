@@ -6,6 +6,7 @@ import { DesktopSidebar } from './DesktopSidebar'
 import { DesktopFooter } from './DesktopFooter'
 import { VoiceOverlay } from './VoiceOverlay'
 import { BlockedScreen } from './BlockedScreen'
+import { GlobalErrorBoundary } from './GlobalErrorBoundary'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function Layout() {
@@ -33,7 +34,9 @@ export default function Layout() {
 
         {/* Área Central de Conteúdo */}
         <main className="flex-1 pb-20 lg:pb-8 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full min-w-0">
-          <Outlet />
+          <GlobalErrorBoundary>
+            <Outlet />
+          </GlobalErrorBoundary>
         </main>
       </div>
 
