@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ajudante.jmsistemas.app.br/sitemap.xml

@@ -28,18 +28,52 @@ import Admin from '@/pages/Admin'
 import NotFound from '@/pages/NotFound'
 
 export default function App() {
-  // Garantir a remoção pontual de badges de atribuição sem loops pesados de DOM
+  // Garantir a remoção contínua e definitiva de badges de atribuição sem sobrecarregar a CPU
   React.useEffect(() => {
-    const removeSkipBadge = () => {
+    const removeSkipBadges = () => {
+      // 1. Seletores diretos
       const candidates = document.querySelectorAll<HTMLElement>(
-        '#skip-badge, .skip-badge, [data-skip-badge], a[href*="goskip.dev"], a[href*="skip.it"]',
+        '#skip-badge, .skip-badge, [data-skip-badge], a[href*="goskip.dev"], a[href*="skip.it"], img[src*="skip.png"]',
       )
       candidates.forEach((el) => {
+        const parent = el.parentElement
         el.remove()
+        // Se o elemento pai continha apenas o badge ou texto "Criado com o Skip", remove-o também
+        if (parent && parent.innerText && parent.innerText.includes('Criado com o Skip')) {
+          parent.remove()
+        }
+      })
+
+      // 2. Busca por texto caso seja injetado em nós de texto ou spans
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+      const nodesToRemove: Node[] = []
+      while (walker.nextNode()) {
+        const node = walker.currentNode
+        if (node.textContent && node.textContent.includes('Criado com o Skip')) {
+          nodesToRemove.push(node)
+        }
+      }
+      nodesToRemove.forEach((node) => {
+        const parent = node.parentElement
+        if (parent && parent !== document.body && parent.id !== 'root') {
+          parent.remove()
+        } else {
+          node.textContent = ''
+        }
       })
     }
 
-    removeSkipBadge()
+    removeSkipBadges()
+
+    // Observer leve para eliminar injeções assíncronas do skip.js
+    const observer = new MutationObserver(() => {
+      removeSkipBadges()
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+
+    return () => {
+      observer.disconnect()
+    }
   }, [])
 
   return (

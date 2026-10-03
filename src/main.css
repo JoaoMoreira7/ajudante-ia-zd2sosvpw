@@ -51,11 +51,22 @@
   [id*='skip-badge'],
   [class*='skip-badge'],
   a[href*='goskip.dev']:not(.allow-skip-link),
-  a[href*='skip.it']:not(.allow-skip-link) {
+  a[href*='skip.it']:not(.allow-skip-link),
+  img[src*='skip.png'],
+  img[alt*='Skip' i],
+  a[href*='goskip'],
+  div:has(> img[src*='skip.png']),
+  footer:has(img[src*='skip.png']),
+  [data-skip-element] {
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
     pointer-events: none !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+    position: absolute !important;
+    left: -9999px !important;
   }
 
   /* Alto Contraste */

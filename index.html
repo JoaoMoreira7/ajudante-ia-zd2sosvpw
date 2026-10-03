@@ -1,15 +1,126 @@
 <!-- HTML template for the frontend react app: https://developer.mozilla.org/en-US/docs/Web/HTML -->
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
+    <style id="anti-skip-badge-style">
+      #skip-badge,
+      .skip-badge,
+      [data-skip-badge],
+      [id*='skip-badge'],
+      [class*='skip-badge'],
+      img[src*='skip.png'],
+      img[alt*='Skip' i],
+      a[href*='goskip.dev']:not(.allow-skip-link),
+      a[href*='skip.it']:not(.allow-skip-link),
+      div:has(> img[src*='skip.png']) {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+        height: 0 !important;
+        width: 0 !important;
+        position: absolute !important;
+        left: -9999px !important;
+      }
+    </style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Ajudante IA — O Assistente do Profissional da Construção</title>
-    <meta name="description" content="Assistente digital por voz e motor determinístico de cálculos para profissionais da construção civil brasileira." />
+    <title>Ajudante IA — Assistente Digital para Construção Civil por Voz</title>
+    <meta
+      name="description"
+      content="Assistente digital por voz para pedreiros, mestres de obras e construtores. Cálculos rápidos de materiais, orçamentos em PDF, controle de obras e financeiro de canteiro sem complicação."
+    />
+    <meta
+      name="keywords"
+      content="ajudante ia, construção civil, assistente de voz, pedreiro, mestre de obras, cálculo de materiais, orçamento de obra, gestão de obras, concreto, argamassa, tijolos, pintura, financeiro obra"
+    />
+    <meta name="author" content="JM Sistemas" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://ajudante.jmsistemas.app.br/" />
     <meta name="theme-color" content="#C97B2D" />
+
+    <!-- Open Graph / Facebook / WhatsApp -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://ajudante.jmsistemas.app.br/" />
+    <meta property="og:title" content="Ajudante IA — Assistente Digital para Construção Civil por Voz" />
+    <meta
+      property="og:description"
+      content="Assistente por voz para pedreiros e mestres de obras: cálculos determinísticos de materiais, orçamentos profissionais, controle de etapas de obras e financeiro 100% offline-first."
+    />
+    <meta property="og:image" content="https://ajudante.jmsistemas.app.br/og-image.png" />
+    <meta property="og:image:alt" content="Ajudante IA - O Assistente do Profissional da Construção Civil" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:site_name" content="Ajudante IA" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://ajudante.jmsistemas.app.br/" />
+    <meta name="twitter:title" content="Ajudante IA — Assistente Digital para Construção Civil por Voz" />
+    <meta
+      name="twitter:description"
+      content="Assistente por voz para pedreiros e mestres de obras: cálculos rápidos de materiais, orçamentos, obras e financeiro."
+    />
+    <meta name="twitter:image" content="https://ajudante.jmsistemas.app.br/og-image.png" />
+
+    <!-- PWA & Favicon -->
     <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/favicon.ico" />
-    <meta property="og:image" content="/og-image.png" />
+
+    <!-- Dados Estruturados Schema.org (JSON-LD) -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Ajudante IA",
+        "url": "https://ajudante.jmsistemas.app.br",
+        "description": "Assistente digital por voz e motor determinístico de cálculos para profissionais da construção civil brasileira. Elabora orçamentos, calcula concreto, piso e alvenaria, gerencia obras e financeiro.",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, Android, iOS",
+        "inLanguage": "pt-BR",
+        "offers": [
+          {
+            "@type": "Offer",
+            "name": "Plano Essencial",
+            "price": "29.90",
+            "priceCurrency": "BRL",
+            "priceSpecification": {
+              "@type": "UnitPriceSpecification",
+              "price": "29.90",
+              "priceCurrency": "BRL",
+              "unitCode": "MON"
+            },
+            "description": "Ideal para autônomos. Até 10 clientes, 5 obras e 15 orçamentos por mês com comandos de voz."
+          },
+          {
+            "@type": "Offer",
+            "name": "Plano Profissional",
+            "price": "49.90",
+            "priceCurrency": "BRL",
+            "priceSpecification": {
+              "@type": "UnitPriceSpecification",
+              "price": "49.90",
+              "priceCurrency": "BRL",
+              "unitCode": "MON"
+            },
+            "description": "Para mestres de obras e empreiteiros. Até 50 clientes, 25 obras, orçamentos em PDF com logo e diário de obras."
+          },
+          {
+            "@type": "Offer",
+            "name": "Plano Empresa",
+            "price": "79.90",
+            "priceCurrency": "BRL",
+            "priceSpecification": {
+              "@type": "UnitPriceSpecification",
+              "price": "79.90",
+              "priceCurrency": "BRL",
+              "unitCode": "MON"
+            },
+            "description": "Para construtoras e equipes. Clientes e obras ilimitados, relatórios financeiros avançados e suporte prioritário."
+          }
+        ]
+      }
+    </script>
   </head>
 
   <body>
