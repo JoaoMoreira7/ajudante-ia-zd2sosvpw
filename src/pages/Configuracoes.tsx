@@ -19,7 +19,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
-import { obterConsumoAudio, formatarMinutosESegundos } from '@/lib/audioUsageTracker'
+import {
+  obterConsumoAudio,
+  formatarMinutosESegundos,
+  calcularEstadoConsumoAudio,
+} from '@/lib/audioUsageTracker'
 import { obterLimitesPlano } from '@/lib/planLimits'
 
 export const Configuracoes: React.FC = () => {
@@ -31,11 +35,10 @@ export const Configuracoes: React.FC = () => {
   const [consumoAudio] = useState(() => obterConsumoAudio(profile?.id))
 
   const limites = obterLimitesPlano(planoAtivo)
-  const minutosUsados = consumoAudio.segundosUsados / 60
-  const pctUso =
-    limites.maxMinutosAudioMes === -1
-      ? 0
-      : Math.min(100, Math.round((minutosUsados / limites.maxMinutosAudioMes) * 100))
+  const estadoConsumo = calcularEstadoConsumoAudio(
+    consumoAudio.segundosUsados,
+    limites.maxMinutosAudioMes,
+  )
 
   const handleSalvarPerfil = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -122,35 +125,63 @@ export const Configuracoes: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="p-4 rounded-xl bg-muted/40 border space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <span className="text-sm font-bold text-foreground flex items-center gap-2">
-                <Radio className="w-4 h-4 text-emerald-600 animate-pulse" />
+                <Radio className={`w-4 h-4 ${estadoConsumo.corTexto} animate-pulse`} />
                 Voz: {formatarMinutosESegundos(consumoAudio.segundosUsados)} de{' '}
-                {limites.maxMinutosAudioMes === -1
+                {estadoConsumo.isIlimitado
                   ? 'Ilimitado'
-                  : `${limites.maxMinutosAudioMes} minutos este mês`}
+                  : `${estadoConsumo.maxMinutos} minutos este mês`}
               </span>
-              <span className="text-xs font-bold text-muted-foreground">
-                {consumoAudio.totalComandosVoz} comandos falados
-              </span>
+              <div className="flex items-center gap-2">
+                {!estadoConsumo.isIlimitado && (
+                  <span
+                    className={`text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${estadoConsumo.corBadge}`}
+                  >
+                    {estadoConsumo.textoEstado}
+                  </span>
+                )}
+                {estadoConsumo.isIlimitado && (
+                  <span className="text-[11px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30">
+                    Ilimitado
+                  </span>
+                )}
+                <span className="text-xs font-bold text-muted-foreground">
+                  {consumoAudio.totalComandosVoz} comandos falados
+                </span>
+              </div>
             </div>
 
-            {limites.maxMinutosAudioMes !== -1 && (
-              <div className="space-y-1">
-                <div className="w-full bg-border h-3 rounded-full overflow-hidden">
+            {!estadoConsumo.isIlimitado ? (
+              <div className="space-y-1.5 pt-1">
+                <div className="w-full bg-border h-3 rounded-full overflow-hidden p-0.5">
                   <div
-                    className={`h-full transition-all duration-500 ${
-                      pctUso >= 90 ? 'bg-destructive' : pctUso >= 70 ? 'bg-amber-500' : 'bg-primary'
-                    }`}
-                    style={{ width: `${pctUso}%` }}
+                    className={`h-full rounded-full transition-all duration-500 ${estadoConsumo.corBarra}`}
+                    style={{
+                      width: `${Math.max(estadoConsumo.percentual > 0 ? 3 : 0, estadoConsumo.percentual)}%`,
+                    }}
                   />
                 </div>
                 <div className="flex justify-between text-[11px] text-muted-foreground font-semibold">
-                  <span>{pctUso}% utilizado</span>
+                  <span className={`font-bold ${estadoConsumo.corTexto}`}>
+                    {estadoConsumo.percentual}% utilizado
+                  </span>
                   <span>
-                    Resta: {Math.max(0, limites.maxMinutosAudioMes - Math.round(minutosUsados))} min
+                    Resta:{' '}
+                    <strong className="text-foreground">
+                      {estadoConsumo.minutosRestantes} min
+                    </strong>
                   </span>
                 </div>
+                {estadoConsumo.nivel !== 'normal' && (
+                  <p className={`text-xs font-semibold ${estadoConsumo.corTexto}`}>
+                    {estadoConsumo.descricaoAmigavel}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800 dark:text-emerald-300 font-medium">
+                ✓ Seu plano inclui processamento de voz ilimitado na nuvem e no aparelho.
               </div>
             )}
           </div>

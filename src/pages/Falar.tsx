@@ -22,7 +22,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { WalkieTalkieButton } from '@/components/WalkieTalkieButton'
 import { ActionCardList } from '@/components/ActionCardList'
-import { obterConsumoAudio, formatarMinutosESegundos } from '@/lib/audioUsageTracker'
+import {
+  obterConsumoAudio,
+  formatarMinutosESegundos,
+  calcularEstadoConsumoAudio,
+} from '@/lib/audioUsageTracker'
 import { obterLimitesPlano } from '@/lib/planLimits'
 
 export const Falar: React.FC = () => {
@@ -162,6 +166,29 @@ export const Falar: React.FC = () => {
                   : `${limites.maxMinutosAudioMes} min`}{' '}
                 este mês
               </span>
+              {(() => {
+                const est = calcularEstadoConsumoAudio(
+                  consumoAudio.segundosUsados,
+                  limites.maxMinutosAudioMes,
+                )
+                if (est.isIlimitado) {
+                  return (
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                      Ilimitado
+                    </span>
+                  )
+                }
+                if (est.nivel !== 'normal') {
+                  return (
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full border ${est.corBadge}`}
+                    >
+                      {est.textoEstado}
+                    </span>
+                  )
+                }
+                return null
+              })()}
             </div>
           </div>
         </div>
@@ -439,6 +466,9 @@ export const Falar: React.FC = () => {
               isProcessing={isProcessing}
               disabled={false}
               isSimpleMode={isModoSimples}
+              exibirSaldoVoz={true}
+              segundosUsados={consumoAudio.segundosUsados}
+              maxMinutos={limites.maxMinutosAudioMes}
             />
             <div className="text-center pb-1">
               <button

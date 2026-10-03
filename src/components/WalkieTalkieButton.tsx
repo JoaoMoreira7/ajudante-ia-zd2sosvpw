@@ -1,12 +1,19 @@
 import React, { useRef, useState, useEffect } from 'react'
-import { Mic, MicOff, Loader2, Radio } from 'lucide-react'
+import { Mic, MicOff, Loader2, Radio, Clock } from 'lucide-react'
 import { useVoiceHybrid } from '@/hooks/useVoiceHybrid'
+import { calcularEstadoConsumoAudio } from '@/lib/audioUsageTracker'
 
 interface WalkieTalkieButtonProps {
   onSendMessage: (text: string, durationSeconds: number) => void
   isProcessing?: boolean
   disabled?: boolean
   isSimpleMode?: boolean
+  /**
+   * Mostra barra discreta de saldo de minutos restante junto ao botão (Melhoria 2)
+   */
+  exibirSaldoVoz?: boolean
+  segundosUsados?: number
+  maxMinutos?: number
 }
 
 export const WalkieTalkieButton: React.FC<WalkieTalkieButtonProps> = ({
@@ -14,6 +21,9 @@ export const WalkieTalkieButton: React.FC<WalkieTalkieButtonProps> = ({
   isProcessing = false,
   disabled = false,
   isSimpleMode = false,
+  exibirSaldoVoz = false,
+  segundosUsados = 0,
+  maxMinutos = 60,
 }) => {
   const { isSupported, isListening, transcript, interimTranscript, startListening, stopListening } =
     useVoiceHybrid()
@@ -118,6 +128,9 @@ export const WalkieTalkieButton: React.FC<WalkieTalkieButtonProps> = ({
   }
 
   const currentDisplay = interimTranscript || transcript
+  const estadoConsumo = exibirSaldoVoz
+    ? calcularEstadoConsumoAudio(segundosUsados, maxMinutos)
+    : null
 
   return (
     <div className="flex flex-col items-center justify-center w-full py-4 px-2">
@@ -174,6 +187,47 @@ export const WalkieTalkieButton: React.FC<WalkieTalkieButtonProps> = ({
           </span>
         </button>
       </div>
+
+      {/* MELHORIA 2: Barra discreta de saldo de minutos junto ao botão walkie-talkie */}
+      {exibirSaldoVoz && estadoConsumo && (
+        <div
+          className={`w-full max-w-[200px] mt-2.5 transition-opacity ${
+            isListening ? 'opacity-100 scale-105' : 'opacity-85 hover:opacity-100'
+          }`}
+          title={
+            estadoConsumo.isIlimitado
+              ? 'Plano com minutos de voz ilimitados'
+              : `${estadoConsumo.percentual}% de voz consumido este mês`
+          }
+        >
+          {estadoConsumo.isIlimitado ? (
+            <div className="flex items-center justify-center gap-1.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span>Voz Ilimitada</span>
+            </div>
+          ) : (
+            <div className="space-y-1">
+              <div className="w-full bg-border/70 dark:bg-muted/80 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${estadoConsumo.corBarra}`}
+                  style={{
+                    width: `${Math.max(estadoConsumo.percentual > 0 ? 4 : 0, estadoConsumo.percentual)}%`,
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-bold">
+                <span className={`flex items-center gap-1 ${estadoConsumo.corTexto}`}>
+                  <Clock className="w-2.5 h-2.5" />
+                  {estadoConsumo.minutosRestantes} min restantes
+                </span>
+                <span className="text-muted-foreground text-[9px] sm:text-[10px]">
+                  {estadoConsumo.percentual}%
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Dica operacional clara e direta para canteiro */}
       <div className="mt-3 text-center max-w-sm">

@@ -25,7 +25,11 @@ import { WalkieTalkieButton } from '@/components/WalkieTalkieButton'
 import { ActionCardList } from '@/components/ActionCardList'
 import { useVoiceContext } from '@/contexts/VoiceContext'
 import { useVoiceHybrid } from '@/hooks/useVoiceHybrid'
-import { obterConsumoAudio, formatarMinutosESegundos } from '@/lib/audioUsageTracker'
+import {
+  obterConsumoAudio,
+  formatarMinutosESegundos,
+  calcularEstadoConsumoAudio,
+} from '@/lib/audioUsageTracker'
 import { obterLimitesPlano } from '@/lib/planLimits'
 import { formatarMoedaSegura, formatarDataSegura, parseDataSegura } from '@/lib/utils'
 
@@ -233,6 +237,9 @@ export const Dashboard: React.FC = () => {
             isProcessing={isProcessing}
             disabled={false}
             isSimpleMode={true}
+            exibirSaldoVoz={true}
+            segundosUsados={consumoAudio.segundosUsados}
+            maxMinutos={limites.maxMinutosAudioMes}
           />
         </div>
 
@@ -388,6 +395,29 @@ export const Dashboard: React.FC = () => {
                 ? 'Ilimitado'
                 : `${limites.maxMinutosAudioMes} min`}
             </span>
+            {(() => {
+              const est = calcularEstadoConsumoAudio(
+                consumoAudio.segundosUsados,
+                limites.maxMinutosAudioMes,
+              )
+              if (est.isIlimitado) {
+                return (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                    Ilimitado
+                  </span>
+                )
+              }
+              if (est.nivel !== 'normal') {
+                return (
+                  <span
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${est.corBadge}`}
+                  >
+                    {est.textoEstado}
+                  </span>
+                )
+              }
+              return null
+            })()}
           </div>
         </div>
 
@@ -397,6 +427,9 @@ export const Dashboard: React.FC = () => {
             isProcessing={isProcessing}
             disabled={false}
             isSimpleMode={false}
+            exibirSaldoVoz={true}
+            segundosUsados={consumoAudio.segundosUsados}
+            maxMinutos={limites.maxMinutosAudioMes}
           />
         </div>
       </div>

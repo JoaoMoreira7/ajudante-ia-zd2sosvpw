@@ -9,6 +9,7 @@ import {
   verificarLimiteAudioMinutos,
   obterLimitesPlano,
 } from './planLimits'
+import { calcularEstadoConsumoAudio } from './audioUsageTracker'
 
 describe('planLimits - Regras e Aplicação de Limites dos Planos', () => {
   describe('Plano Essencial (R$ 29,90)', () => {
@@ -147,6 +148,51 @@ describe('planLimits - Regras e Aplicação de Limites dos Planos', () => {
     it('deve ser ilimitado no plano empresa', () => {
       const ok = verificarLimiteAudioMinutos('empresa', 9999)
       expect(ok.permitido).toBe(true)
+    })
+  })
+
+  describe('Mudança Dinâmica de Cores do Consumo de Voz (Regra Consultor)', () => {
+    it('deve retornar verde (normal) até 70% do consumo', () => {
+      // 60 minutos total: 30 minutos = 50%
+      const est = calcularEstadoConsumoAudio(30 * 60, 60)
+      expect(est.nivel).toBe('normal')
+      expect(est.corBarra).toContain('bg-emerald-500')
+      expect(est.textoEstado).toBe('Normal')
+      expect(est.minutosRestantes).toBe(30)
+      expect(est.isIlimitado).toBe(false)
+    })
+
+    it('deve retornar amarelo (atenção) entre 70% e 90%', () => {
+      // 60 minutos total: 45 minutos = 75%
+      const est = calcularEstadoConsumoAudio(45 * 60, 60)
+      expect(est.nivel).toBe('atencao')
+      expect(est.corBarra).toContain('bg-amber-500')
+      expect(est.textoEstado).toBe('Atenção')
+      expect(est.minutosRestantes).toBe(15)
+    })
+
+    it('deve retornar vermelho (crítico / quase no limite) acima de 90%', () => {
+      // 60 minutos total: 55 minutos = ~92%
+      const est = calcularEstadoConsumoAudio(55 * 60, 60)
+      expect(est.nivel).toBe('critico')
+      expect(est.corBarra).toContain('bg-red-500')
+      expect(est.textoEstado).toBe('Quase no limite')
+      expect(est.minutosRestantes).toBe(5)
+    })
+
+    it('deve acusar limite atingido quando percentual >= 100%', () => {
+      const est = calcularEstadoConsumoAudio(60 * 60, 60)
+      expect(est.nivel).toBe('critico')
+      expect(est.corBarra).toContain('bg-red-500')
+      expect(est.textoEstado).toBe('Limite atingido')
+      expect(est.minutosRestantes).toBe(0)
+    })
+
+    it('deve tratar plano ilimitado (max = -1) como estado neutro/ilimitado sem limite', () => {
+      const est = calcularEstadoConsumoAudio(500 * 60, -1)
+      expect(est.isIlimitado).toBe(true)
+      expect(est.nivel).toBe('ilimitado')
+      expect(est.textoEstado).toBe('Ilimitado')
     })
   })
 })
