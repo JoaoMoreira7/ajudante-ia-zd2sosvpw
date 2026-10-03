@@ -192,7 +192,7 @@ export const Dashboard: React.FC = () => {
         <div className="p-6 rounded-3xl bg-card border-2 border-primary/40 shadow-sm text-center">
           <h1 className="text-2xl sm:text-3xl font-black text-foreground">Olá, {nomeExibicao}!</h1>
           <p className="text-base text-muted-foreground font-medium mt-1">
-            Como posso te ajudar na obra hoje?
+            Pare de preencher planilha. Fale e pronto.
           </p>
         </div>
 
@@ -299,11 +299,15 @@ export const Dashboard: React.FC = () => {
       {/* Saudação e Botão FALAR Principal */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl bg-gradient-to-r from-card to-muted/40 border border-border shadow-xs">
         <div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold uppercase tracking-wider mb-1.5">
+            <Sparkles className="w-3 h-3" />
+            <span>2 horas de papelada viram 15 minutos de fala</span>
+          </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
             Olá, {nomeExibicao}!
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Como posso ajudar você hoje na obra?
+            Pare de preencher planilha. Fale e pronto.
           </p>
         </div>
 

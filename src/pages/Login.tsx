@@ -37,6 +37,9 @@ export const Login: React.FC = () => {
             <HardHat className="w-8 h-8" />
           </div>
           <CardTitle className="text-2xl font-black">Entrar no Ajudante IA</CardTitle>
+          <p className="text-xs font-semibold text-primary">
+            2 horas de papelada viram 15 minutos de fala.
+          </p>
           <CardDescription>Acesse seus orçamentos, obras e cálculos com segurança.</CardDescription>
         </CardHeader>
         <CardContent>

@@ -109,9 +109,12 @@ export const Cadastro: React.FC = () => {
           <CardTitle className="text-2xl sm:text-3xl font-black text-foreground">
             Criar Conta no Ajudante IA
           </CardTitle>
+          <p className="text-xs sm:text-sm font-semibold text-primary">
+            2 horas de papelada viram 15 minutos de fala. Pare de preencher planilha: fale e pronto.
+          </p>
           <CardDescription className="text-sm">
             Experimente gratuitamente com <strong>7 dias de teste completo</strong> no canteiro de
-            obras.
+            obras. Se não economizar seu tempo na primeira semana, não continue.
           </CardDescription>
         </CardHeader>
 

@@ -12,6 +12,11 @@ import {
   PhoneCall,
   BadgeCheck,
   ArrowRight,
+  Clock,
+  Mic,
+  TrendingUp,
+  Scale,
+  Cloud,
 } from 'lucide-react'
 import {
   Card,
@@ -50,7 +55,115 @@ export const PlanosPage: React.FC = () => {
 
   return (
     <div className="space-y-8 max-w-6xl mx-auto pb-12">
-      {/* Top Banner */}
+      {/* 1. SEÇÃO DE ROI EM TEMPO: QUANTO VOCÊ GANHA USANDO */}
+      <section className="bg-gradient-to-b from-primary/10 via-card to-card border-2 border-primary/30 rounded-3xl p-6 sm:p-8 shadow-sm text-center space-y-6">
+        <div className="space-y-2 max-w-2xl mx-auto">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-black uppercase tracking-wider">
+            <TrendingUp className="w-3.5 h-3.5" />
+            <span>Retorno Rápido Garantido</span>
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
+            Quanto você ganha usando o Ajudante IA?
+          </h2>
+          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
+            Você gasta de 1 a 2 horas por dia com relatórios e planilhas. Falando com o Ajudante IA,
+            esse tempo cai para 15 minutos. No primeiro mês, o aplicativo já se paga sozinho.
+          </p>
+        </div>
+
+        {/* 3 Números Grandes de Impacto */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl mx-auto pt-2">
+          <div className="p-5 rounded-2xl bg-card border border-border/80 shadow-xs flex flex-col items-center justify-center space-y-2">
+            <div className="w-10 h-10 rounded-xl bg-destructive/10 text-destructive flex items-center justify-center">
+              <Clock className="w-5 h-5" />
+            </div>
+            <span className="text-3xl sm:text-4xl font-black text-foreground tracking-tight">
+              2h por dia
+            </span>
+            <p className="text-xs font-semibold text-muted-foreground">
+              perdidas em papelada, anotações de canteiro e planilhas manuais.
+            </p>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-primary/10 border-2 border-primary/40 shadow-xs flex flex-col items-center justify-center space-y-2">
+            <div className="w-10 h-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center">
+              <Mic className="w-5 h-5" />
+            </div>
+            <span className="text-3xl sm:text-4xl font-black text-primary tracking-tight">
+              15 minutos
+            </span>
+            <p className="text-xs font-semibold text-foreground">
+              apenas falando comandos de voz direto da obra. Rápido e prático.
+            </p>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 shadow-xs flex flex-col items-center justify-center space-y-2">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-center">
+              <TrendingUp className="w-5 h-5" />
+            </div>
+            <span className="text-3xl sm:text-4xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
+              1ª semana
+            </span>
+            <p className="text-xs font-semibold text-muted-foreground">
+              é o tempo médio para a economia de horas pagar o investimento.
+            </p>
+          </div>
+        </div>
+
+        <div className="pt-2">
+          <p className="text-xs font-bold text-foreground tracking-wide uppercase">
+            VOCÊ FALA. O AJUDANTE IA FAZ.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Você fala. O Ajudante IA entende, calcula, registra e responde.
+          </p>
+        </div>
+      </section>
+
+      {/* 2. FAIXA DE POSICIONAMENTO DE MERCADO & TRIAL DE 7 DIAS */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Bloco Mercado */}
+        <div className="p-5 sm:p-6 rounded-2xl bg-muted/60 border border-border flex items-start gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <Scale className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <span className="text-[11px] font-black uppercase tracking-wider text-primary block">
+              Comparação de Mercado
+            </span>
+            <h3 className="text-base sm:text-lg font-black text-foreground leading-snug">
+              Muito mais valor por uma fração do preço
+            </h3>
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              Ferramentas de gestão de obra do mercado cobram de{' '}
+              <strong>R$ 50 a R$ 200 por mês</strong> — e nenhuma trabalha por voz como o Ajudante
+              IA. Aqui você tem praticidade total{' '}
+              <strong className="text-foreground">a partir de R$ 29,90</strong>.
+            </p>
+          </div>
+        </div>
+
+        {/* Bloco Trial com Gancho de ROI */}
+        <div className="p-5 sm:p-6 rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/30 flex items-start gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 flex items-center justify-center shrink-0">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <div className="space-y-1">
+            <span className="text-[11px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 block">
+              Teste Sem Riscos
+            </span>
+            <h3 className="text-base sm:text-lg font-black text-foreground leading-snug">
+              Teste 7 dias grátis no seu canteiro
+            </h3>
+            <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+              Se o Ajudante IA não te economizar tempo logo na primeira semana, não continue. Você
+              experimenta todas as funções sem compromisso e sem pegadinhas.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Top Banner dos Planos */}
       <div className="text-center space-y-3 max-w-3xl mx-auto pt-2">
         <Badge
           variant="outline"
@@ -212,8 +325,8 @@ export const PlanosPage: React.FC = () => {
         })}
       </div>
 
-      {/* Garantia e Regra de Cálculos Livres */}
-      <div className="p-6 rounded-2xl bg-muted/40 border border-border grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Garantia, Infraestrutura de IA e Regra de Cálculos Livres */}
+      <div className="p-6 rounded-2xl bg-muted/40 border border-border grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0 font-bold">
             ✓
@@ -231,6 +344,21 @@ export const PlanosPage: React.FC = () => {
 
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 font-bold">
+            <Cloud className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-foreground uppercase tracking-wider">
+              Inteligência e Voz em Nuvem
+            </h4>
+            <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+              Sua assinatura garante processamento contínuo de voz inteligente e sincronização
+              segura sempre atualizada com a melhor tecnologia.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0 font-bold">
             ⚡
           </div>
           <div>
@@ -238,8 +366,8 @@ export const PlanosPage: React.FC = () => {
               100% Offline-First
             </h4>
             <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-              Seus dados ficam gravados no celular no canteiro sem internet e sincronizam
-              automaticamente com a nuvem quando reconectar.
+              Seus dados ficam gravados no celular no canteiro mesmo sem sinal de internet e
+              sincronizam quando reconectar.
             </p>
           </div>
         </div>
@@ -253,8 +381,8 @@ export const PlanosPage: React.FC = () => {
               Ativação por Venda Direta
             </h4>
             <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
-              Pague via Pix direto, boleto ou transferência com confirmação imediata e liberação na
-              hora sem complicações.
+              Pague via Pix direto, boleto ou transferência com confirmação rápida e liberação
+              imediata sem burocracia.
             </p>
           </div>
         </div>
