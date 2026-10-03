@@ -44,15 +44,15 @@ export const VoiceOverlay: React.FC<VoiceOverlayProps> = ({ isOpen, onClose }) =
     }
   }, [transcript, isListening, processUserInput])
 
-  // Se a última resposta for do ajudante, sintetiza voz pt-BR
+  // Se a última resposta for do ajudante, sintetiza voz pt-BR se overlay estiver aberto
   useEffect(() => {
-    if (interactions.length > 0) {
+    if (isOpen && interactions.length > 0) {
       const last = interactions[interactions.length - 1]
       if (last.autor === 'ajudante' && last.texto) {
         speakText(last.texto)
       }
     }
-  }, [interactions, speakText])
+  }, [isOpen, interactions, speakText])
 
   if (!isOpen) return null
 

@@ -94,6 +94,9 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       },
     },
   ])
+  const [conversationId, setConversationId] = useState<string | null>(() => {
+    return localStorage.getItem('ajudante_chat_conv_id') || null
+  })
   const [contextData, setContextData] = useState<ConversationContextData>({
     perdaPct: 10,
     aberturas: [],
@@ -124,13 +127,22 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const clearContext = useCallback(() => {
     setContextData({ perdaPct: 10, aberturas: [] })
+    setConversationId(null)
+    localStorage.removeItem('ajudante_chat_conv_id')
     setInteractions((prev) => [
       ...prev,
       {
         id: 'ctx_clear_' + Date.now(),
         autor: 'ajudante',
-        texto: 'Contexto limpo! O que deseja calcular ou registrar agora?',
+        texto: 'Conversa renovada! O que você gostaria de calcular ou organizar agora?',
         timestamp: Date.now(),
+        detalhes: {
+          sugestoes: [
+            'Calcula parede de 5 por 3',
+            'Quanto de piso para 25 metros?',
+            'Registra saída de material',
+          ],
+        },
       },
     ])
   }, [])
@@ -155,8 +167,10 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setStatusText('ENTENDENDO...')
 
     try {
-      // Tenta Skip Cloud Agent se online e autenticado, para enriquecimento semântico
+      // Tenta Skip Cloud Agent se online e autenticado, para diálogo e semântica
       let skipAgentIntent: any = null
+      let skipAgentReplyText: string | null = null
+
       if (navigator.onLine && pb.authStore.isValid) {
         try {
           const res = await fetch(`${pb.baseUrl}/backend/v1/interpret`, {
@@ -165,16 +179,26 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               'Content-Type': 'application/json',
               Authorization: pb.authStore.token,
             },
-            body: JSON.stringify({ message: text }),
+            body: JSON.stringify({
+              message: text,
+              conversation_id: conversationId || undefined,
+            }),
           })
           if (res.ok) {
             const data = await res.json()
+            if (data?.conversation_id) {
+              setConversationId(data.conversation_id)
+              localStorage.setItem('ajudante_chat_conv_id', data.conversation_id)
+            }
             if (data?.intent) {
               skipAgentIntent = data.intent
             }
+            if (data?.content && typeof data.content === 'string') {
+              skipAgentReplyText = data.content.trim()
+            }
           }
         } catch {
-          // Degradação graciosa: fallback local imediato
+          // Degradação graciosa: fallback local imediato se offline ou erro
         }
       }
 
@@ -986,16 +1010,27 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         tipoBadge = 'EXATO'
       } else {
-        // Fallback amigável
-        respostaTexto =
-          parsed.respostaSugerida ||
-          'Não tenho informação suficiente para calcular isso. Qual a medida da parede ou o serviço que você precisa?'
-        tipoBadge = 'EXATO'
-        sugestoes = [
-          'Calcula parede de 8 por 3',
-          'Quanto de piso para 20m²?',
-          'Registra uma despesa',
-        ]
+        // Se a IA nativa do Skip Cloud tiver gerado uma resposta conversacional humana de qualidade
+        if (skipAgentReplyText) {
+          respostaTexto = skipAgentReplyText
+          tipoBadge = 'TECNICA'
+          sugestoes = [
+            'Calcula parede de 5 por 3',
+            'Quanto de bloco cerâmico?',
+            'Quanto de reboco?',
+          ]
+        } else {
+          // Fallback amigável offline
+          respostaTexto =
+            parsed.respostaSugerida ||
+            'Não tenho informação suficiente para calcular isso. Qual a medida da parede ou o serviço que você precisa?'
+          tipoBadge = 'EXATO'
+          sugestoes = [
+            'Calcula parede de 8 por 3',
+            'Quanto de piso para 20m²?',
+            'Registra uma despesa',
+          ]
+        }
       }
 
       const assistantMsg: ChatInteraction = {

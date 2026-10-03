@@ -120,32 +120,55 @@ export function useVoiceHybrid() {
     }
   }, [])
 
-  // Sintetizador de voz pt-BR
+  // Sintetizador de voz pt-BR claro e calmo, sem jargão
   const speakText = useCallback((text: string) => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel()
-        // Remove markdown e símbolos excessivos para fala natural
+        // Remove markdown, caracteres de controle e ajusta pronúncia em pt-BR
         const cleanToSpeak = text
-          .replace(/[#*_`]/g, '')
-          .replace(/R\$\s*/g, 'reais ')
+          .replace(/[#*_`~]/g, '')
+          .replace(/INTENT_JSON:.*$/s, '')
+          .replace(/R\$\s*([0-9.,]+)/g, '$1 reais')
           .replace(/m²/g, 'metros quadrados')
           .replace(/m³/g, 'metros cúbicos')
+          .replace(/cm/g, 'centímetros')
+          .replace(/kg/g, 'quilos')
+          .replace(/un/g, 'unidades')
+          .replace(/•/g, '')
+          .replace(/⚠️/g, 'Atenção:')
+          .trim()
+
+        if (!cleanToSpeak) return
 
         const utterance = new SpeechSynthesisUtterance(cleanToSpeak)
         utterance.lang = 'pt-BR'
-        utterance.rate = 1.05
+        utterance.rate = 1.0 // Cadência calma e clara
+        utterance.pitch = 1.0
 
-        // Tenta selecionar voz pt-BR nativa
-        const voices = window.speechSynthesis.getVoices()
-        const ptVoice = voices.find((v) => v.lang.startsWith('pt') || v.lang.includes('BR'))
-        if (ptVoice) {
-          utterance.voice = ptVoice
+        // Seleção de voz pt-BR com fallback
+        const selectAndSpeak = () => {
+          const voices = window.speechSynthesis.getVoices()
+          const ptVoice =
+            voices.find((v) => v.lang === 'pt-BR' || v.lang === 'pt_BR') ||
+            voices.find((v) => v.lang.startsWith('pt'))
+          if (ptVoice) {
+            utterance.voice = ptVoice
+          }
+          window.speechSynthesis.speak(utterance)
         }
 
-        window.speechSynthesis.speak(utterance)
+        const voices = window.speechSynthesis.getVoices()
+        if (voices.length > 0) {
+          selectAndSpeak()
+        } else {
+          // Chrome às vezes carrega vozes assincronamente
+          window.speechSynthesis.onvoiceschanged = () => {
+            selectAndSpeak()
+          }
+        }
       } catch (e) {
-        console.warn('Erro ao falar texto:', e)
+        console.warn('Erro ao sintetizar voz:', e)
       }
     }
   }, [])
