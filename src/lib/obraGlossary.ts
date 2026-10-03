@@ -23,7 +23,7 @@ export interface ResultadoNormalizacao {
 // Ordem: termos mais específicos primeiro para evitar substituições parciais indevidas
 export const REGRAS_GLOSSARIO_OBRA: Array<{ padrao: RegExp; substituicao: string; termo: string }> =
   [
-    // Viga baldrame / fundação
+    // Viga baldrame / fundação (inclui normalização fonética "bardame", "bar d'água", "baldrama")
     {
       padrao: /\bviga\s+de\s+bar\s*d['’]?\s*á?gua\b/gi,
       substituicao: 'viga baldrame',
@@ -35,6 +35,8 @@ export const REGRAS_GLOSSARIO_OBRA: Array<{ padrao: RegExp; substituicao: string
       termo: 'viga baldrame',
     },
     { padrao: /\bviga\s+de\s+baldrame\b/gi, substituicao: 'viga baldrame', termo: 'viga baldrame' },
+    { padrao: /\bbar\s*d['’]?\s*á?gua\b/gi, substituicao: 'baldrame', termo: 'baldrame' },
+    { padrao: /\bbardame\b/gi, substituicao: 'baldrame', termo: 'baldrame' },
     { padrao: /\bbal\s*drame\b/gi, substituicao: 'baldrame', termo: 'baldrame' },
     { padrao: /\bbar\s*drame\b/gi, substituicao: 'baldrame', termo: 'baldrame' },
     { padrao: /\bbandrame\b/gi, substituicao: 'baldrame', termo: 'baldrame' },

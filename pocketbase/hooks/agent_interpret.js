@@ -110,9 +110,12 @@ routerAdd(
           subs: 'viga baldrame',
           termo: 'viga baldrame',
         },
+        { padrao: /\bviga\s+de\s+baldrame\b/gi, subs: 'viga baldrame', termo: 'viga baldrame' },
+        { padrao: /\bbar\s*d['’]?\s*á?gua\b/gi, subs: 'baldrame', termo: 'baldrame' },
+        { padrao: /\bbardame\b/gi, subs: 'baldrame', termo: 'baldrame' },
+        { padrao: /\bbal\s*drame\b/gi, subs: 'baldrame', termo: 'baldrame' },
         { padrao: /\bbar\s*drame\b/gi, subs: 'baldrame', termo: 'baldrame' },
         { padrao: /\bbandrame\b/gi, subs: 'baldrame', termo: 'baldrame' },
-        { padrao: /\bviga\s+de\s+baldrame\b/gi, subs: 'viga baldrame', termo: 'viga baldrame' },
         { padrao: /\bcontra[- ]piso\b/gi, subs: 'contrapiso', termo: 'contrapiso' },
         { padrao: /\bcontra\s+piso\b/gi, subs: 'contrapiso', termo: 'contrapiso' },
         { padrao: /\bcontra\s+peso\b/gi, subs: 'contrapiso', termo: 'contrapiso' },
@@ -265,6 +268,8 @@ routerAdd(
       // Normalização rápida de erros de transcrição no stream
       message = message
         .replace(/\bviga\s+de\s+bar\s*d['’]?\s*á?gua\b/gi, 'viga baldrame')
+        .replace(/\bbardame\b/gi, 'baldrame')
+        .replace(/\bbar\s*d['’]?\s*á?gua\b/gi, 'baldrame')
         .replace(/\bcontra[- ]piso\b/gi, 'contrapiso')
         .replace(/\bcontra\s+piso\b/gi, 'contrapiso')
         .replace(/\breboque\b/gi, 'reboco')

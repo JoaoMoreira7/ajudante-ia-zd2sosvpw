@@ -84,4 +84,34 @@ describe('Interpretador Local de Intenções (Português do Brasil)', () => {
     expect(res.intent).toBe('consultar_diario_obra')
     expect(res.params.dataExpressao).toBe('ontem')
   })
+
+  test('Regra 2: "bater o nível com a mangueira" e variantes viram atividade "Nivelamento Hidráulico"', () => {
+    const res1 = parseLocalIntent('Hoje a gente foi bater o nível com a mangueira na fundação')
+    expect(res1.intent).toBe('diario_obra')
+    expect(res1.params.atividade).toBe('Nivelamento Hidráulico')
+    expect(res1.params.servico).toBe('Nivelamento Hidráulico')
+
+    const res2 = parseLocalIntent('precisamos nivelar com a mangueira todo o terreno')
+    expect(res2.intent).toBe('diario_obra')
+    expect(res2.params.atividade).toBe('Nivelamento Hidráulico')
+
+    const res3 = parseLocalIntent('vamos bater nível de mangueira nos pilares')
+    expect(res3.intent).toBe('diario_obra')
+    expect(res3.params.atividade).toBe('Nivelamento Hidráulico')
+  })
+
+  test('Regra 3: "bater um traço" e variantes viram atividade "Preparação de Argamassa/Concreto"', () => {
+    const res1 = parseLocalIntent('o ajudante foi bater um traço para o reboco')
+    expect(res1.intent).toBe('diario_obra')
+    expect(res1.params.atividade).toBe('Preparação de Argamassa/Concreto')
+    expect(res1.params.servico).toBe('Preparação de Argamassa/Concreto')
+
+    const res2 = parseLocalIntent('ele bateu traço de concreto 1 para 3')
+    expect(res2.intent).toBe('diario_obra')
+    expect(res2.params.atividade).toBe('Preparação de Argamassa/Concreto')
+
+    const res3 = parseLocalIntent('vamos bater traço na betoneira')
+    expect(res3.intent).toBe('diario_obra')
+    expect(res3.params.atividade).toBe('Preparação de Argamassa/Concreto')
+  })
 })

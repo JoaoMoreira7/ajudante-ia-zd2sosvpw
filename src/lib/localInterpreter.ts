@@ -221,6 +221,41 @@ export function interpretCommandLocally(text: string): LocalParsedIntent {
     }
   }
 
+  // 11.1 Classificação de atividades de obra: "bater o nível com a mangueira" / "bater um traço"
+  if (
+    /\b(bater\s+(?:o\s+)?n[íi]vel\s+(?:com\s+a\s+|de\s+)?mangueira|bater\s+n[íi]vel\s+de\s+mangueira|nivelar\s+com\s+a\s+mangueira|nivelamento\s+com\s+mangueira)\b/i.test(
+      norm,
+    )
+  ) {
+    return {
+      intent: 'diario_obra',
+      confidence: 0.98,
+      params: {
+        atividade: 'Nivelamento Hidráulico',
+        servico: 'Nivelamento Hidráulico',
+        textoOriginal: text,
+      },
+      descricaoHumana: 'Classificar e registrar atividade como Nivelamento Hidráulico.',
+    }
+  }
+
+  if (
+    /\b(bater\s+(?:um\s+|o\s+)?tra[çc]o|bateu\s+(?:um\s+|o\s+)?tra[çc]o|bater\s+tra[çc]o)\b/i.test(
+      norm,
+    )
+  ) {
+    return {
+      intent: 'diario_obra',
+      confidence: 0.98,
+      params: {
+        atividade: 'Preparação de Argamassa/Concreto',
+        servico: 'Preparação de Argamassa/Concreto',
+        textoOriginal: text,
+      },
+      descricaoHumana: 'Classificar e registrar atividade como Preparação de Argamassa/Concreto.',
+    }
+  }
+
   // 12. "Tenho 15 sacos de cimento" / "Baixa 5 sacos de cimento"
   const matchTenho = norm.match(
     /(?:tenho|chegou|entrou)\s+(\d+)\s+(?:sacos?|un|kg|l)?\s*(?:de\s+)?(.+)/,

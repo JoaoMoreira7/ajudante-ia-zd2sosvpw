@@ -300,7 +300,8 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             })
             titulosResumo.push(`🟩 Material: ${qtd} ${un} de ${mat}`)
           } else if (actionType === 'ocorrencia' || intentName.includes('diario')) {
-            const serv = params.servico || params.ocorrencia || 'Ocorrência registrada'
+            const serv =
+              params.atividade || params.servico || params.ocorrencia || 'Atividade registrada'
             const obs = params.observacao || params.textoCompleto || text
             const obras = await localDB.getAll('obras')
             const obraAlvo = obras[0]
@@ -1178,23 +1179,24 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         tipoBadge = 'EXATO'
       } else if (parsed.intent === 'diario_obra') {
-        const serv = parsed.params.servico
-        const qtd = parsed.params.quantidade
+        const serv = parsed.params.atividade || parsed.params.servico || 'Atividade de obra'
+        const qtd = parsed.params.quantidade || 0
         const obras = await localDB.getAll('obras')
         const obraAlvo = obras[0]
+        const descQtd = qtd > 0 ? ` (${qtd} m²)` : ''
         if (obraAlvo) {
-          const entry = await localDB.put('diario_obra', {
+          await localDB.put('diario_obra', {
             id: 'dia_' + Date.now(),
             owner_id: 'local_user',
             obra_id: obraAlvo.id,
             data: new Date().toISOString(),
             servico: serv,
             quantidade: qtd,
-            observacoes: parsed.params.textoCompleto,
+            observacoes: parsed.params.textoCompleto || text,
           })
-          respostaTexto = `Diário registrado na obra "${obraAlvo.titulo}": ${serv} (${qtd} m²).`
+          respostaTexto = `Atividade registrada no diário da obra "${obraAlvo.titulo}": ${serv}${descQtd}.`
         } else {
-          respostaTexto = `Diário anotado: ${serv} (${qtd} m²).`
+          respostaTexto = `Atividade anotada no diário: ${serv}${descQtd}.`
         }
         tipoBadge = 'EXATO'
       } else {

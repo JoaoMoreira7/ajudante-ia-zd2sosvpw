@@ -89,5 +89,18 @@ export function runInterpreterTests(): { passed: number; failed: number; errors:
   assert(t16.intent === 'estoque_baixar', 'Baixa 5 sacos')
   assert(t16.params.quantidade === 5, 'Quantidade 5')
 
+  // 16. Regra 2: "bater o nível com a mangueira" -> Nivelamento Hidráulico
+  const t17 = interpretCommandLocally('bater o nível com a mangueira')
+  assert(t17.intent === 'diario_obra', 'Nivelamento com mangueira deve ser diario_obra')
+  assert(t17.params.atividade === 'Nivelamento Hidráulico', 'Atividade Nivelamento Hidráulico')
+
+  // 17. Regra 3: "bater um traço" -> Preparação de Argamassa/Concreto
+  const t18 = interpretCommandLocally('bater um traço')
+  assert(t18.intent === 'diario_obra', 'Bater um traço deve ser diario_obra')
+  assert(
+    t18.params.atividade === 'Preparação de Argamassa/Concreto',
+    'Atividade Preparação de Argamassa/Concreto',
+  )
+
   return { passed, failed, errors }
 }

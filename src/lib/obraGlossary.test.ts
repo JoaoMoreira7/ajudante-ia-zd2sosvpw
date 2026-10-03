@@ -9,6 +9,20 @@ describe('obraGlossary - Normalização de Jargões e Erros de STT de Obra', () 
     expect(res.correcoes.some((c) => c.termoDetectado === 'viga baldrame')).toBe(true)
   })
 
+  it('deve traduzir transcrição com "bardame" e variantes para "baldrame" (Regra 1)', () => {
+    const res1 = normalizarJargaoObra('concretamos o bardame da fundação')
+    expect(res1.houveCorrecao).toBe(true)
+    expect(res1.textoNormalizado).toBe('concretamos o baldrame da fundação')
+    expect(res1.correcoes.some((c) => c.corrigido === 'baldrame')).toBe(true)
+
+    const res2 = normalizarJargaoObra("passar piche no bar d'água")
+    expect(res2.houveCorrecao).toBe(true)
+    expect(res2.textoNormalizado).toContain('baldrame')
+
+    const res3 = normalizarJargaoObra('amarrou os estribos da viga de bardame')
+    expect(res3.textoNormalizado).toContain('viga de baldrame')
+  })
+
   it('deve corrigir "contra-piso" e "contra piso" para "contrapiso"', () => {
     const res1 = normalizarJargaoObra('fizemos o contra-piso da sala')
     expect(res1.textoNormalizado).toBe('fizemos o contrapiso da sala')

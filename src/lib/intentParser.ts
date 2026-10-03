@@ -363,6 +363,50 @@ export function parseLocalIntent(text: string, context?: Record<string, any>): P
   }
 
   // 15. DIÁRIO DE OBRA: CONSULTA E REGISTRO
+  // Regras de classificação de atividade em jargões de obra:
+  // - "bater o nível com a mangueira" (e variantes) -> atividade "Nivelamento Hidráulico"
+  // - "bater um traço" (e variantes) -> atividade "Preparação de Argamassa/Concreto"
+  if (
+    /\b(bater\s+(?:o\s+)?n[íi]vel\s+(?:com\s+a\s+|de\s+)?mangueira|bater\s+n[íi]vel\s+de\s+mangueira|nivelar\s+com\s+a\s+mangueira|nivelamento\s+com\s+mangueira)\b/i.test(
+      clean,
+    )
+  ) {
+    return {
+      intent: 'diario_obra',
+      confidence: 0.98,
+      params: {
+        atividade: 'Nivelamento Hidráulico',
+        servico: 'Nivelamento Hidráulico',
+        quantidade: 1,
+        textoCompleto: text,
+      },
+      rawText: text,
+      categoriaAcao: 'obra',
+      respostaSugerida: 'Atividade registrada no diário/relatório: Nivelamento Hidráulico.',
+    }
+  }
+
+  if (
+    /\b(bater\s+(?:um\s+|o\s+)?tra[çc]o|bateu\s+(?:um\s+|o\s+)?tra[çc]o|bater\s+tra[çc]o)\b/i.test(
+      clean,
+    )
+  ) {
+    return {
+      intent: 'diario_obra',
+      confidence: 0.98,
+      params: {
+        atividade: 'Preparação de Argamassa/Concreto',
+        servico: 'Preparação de Argamassa/Concreto',
+        quantidade: 1,
+        textoCompleto: text,
+      },
+      rawText: text,
+      categoriaAcao: 'obra',
+      respostaSugerida:
+        'Atividade registrada no diário/relatório: Preparação de Argamassa/Concreto.',
+    }
+  }
+
   // Consulta: "O que eu fiz na obra do João ontem?" / "O que fiz na obra ontem?" / "Diário de ontem"
   if (
     /\b(o que eu fiz|o que fiz|o que foi feito|consultar diário|ver diário|diário da obra|relatório de ontem)\b/.test(
