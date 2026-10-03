@@ -42,10 +42,21 @@ export function useVoiceHybrid() {
   const recognitionRef = useRef<any>(null)
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const SpeechClass = window.SpeechRecognition || window.webkitSpeechRecognition
+    try {
+      if (typeof window === 'undefined') {
+        setIsSupported(false)
+        return
+      }
+
+      // Verificação segura de suporte sem lançar em ambientes móveis restritos
+      let SpeechClass: any = null
+      try {
+        SpeechClass = window.SpeechRecognition || window.webkitSpeechRecognition || null
+      } catch {
+        SpeechClass = null
+      }
+
       if (SpeechClass) {
-        setIsSupported(true)
         try {
           const recognition: any = new SpeechClass()
           recognition.lang = 'pt-BR'
@@ -54,28 +65,34 @@ export function useVoiceHybrid() {
           recognition.maxAlternatives = 1
 
           recognition.onresult = (event: any) => {
-            let interim = ''
-            let final = ''
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-              if (event.results[i].isFinal) {
-                final += event.results[i][0].transcript
-              } else {
-                interim += event.results[i][0].transcript
+            try {
+              let interim = ''
+              let final = ''
+              for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i] && event.results[i][0]) {
+                  if (event.results[i].isFinal) {
+                    final += event.results[i][0].transcript || ''
+                  } else {
+                    interim += event.results[i][0].transcript || ''
+                  }
+                }
               }
+              if (final) {
+                setTranscript(final.trim())
+              }
+              setInterimTranscript(interim.trim())
+            } catch (err) {
+              console.warn('Erro ao processar resultado do microfone:', err)
             }
-            if (final) {
-              setTranscript(final.trim())
-            }
-            setInterimTranscript(interim.trim())
           }
 
           recognition.onerror = (event: any) => {
-            console.warn('Erro de reconhecimento de voz:', event.error)
+            console.warn('Erro de reconhecimento de voz:', event?.error)
             setIsListening(false)
-            if (event.error === 'not-allowed') {
+            if (event?.error === 'not-allowed') {
               setSpeechError('Microfone bloqueado. Habilite o acesso ou use o teclado.')
-            } else if (event.error !== 'no-speech') {
-              setSpeechError('Não consegui ouvir com clareza. Tente falar novamente.')
+            } else if (event?.error !== 'no-speech') {
+              setSpeechError('Não consegui ouvir com clareza. Tente falar ou use o teclado.')
             }
           }
 
@@ -84,13 +101,18 @@ export function useVoiceHybrid() {
           }
 
           recognitionRef.current = recognition
+          setIsSupported(true)
         } catch (e) {
           console.warn('Falha ao instanciar SpeechRecognition:', e)
+          recognitionRef.current = null
           setIsSupported(false)
         }
       } else {
         setIsSupported(false)
       }
+    } catch (globalErr) {
+      console.warn('Erro global na inicialização de voz:', globalErr)
+      setIsSupported(false)
     }
   }, [])
 

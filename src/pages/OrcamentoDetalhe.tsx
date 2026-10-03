@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { formatarMoedaSegura } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/contexts/AuthContext'
 import { gerarEImprimirRecibo, gerarEImprimirOrdemServico } from '@/lib/documentGenerator'
@@ -102,18 +103,20 @@ export const OrcamentoDetalhe: React.FC = () => {
 
   // Texto formatado para envio no WhatsApp
   const textoWhatsApp =
-    `*ORÇAMENTO: ${orcamento.titulo.toUpperCase()}*\n\n` +
+    `*ORÇAMENTO: ${(orcamento.titulo || 'ORÇAMENTO').toUpperCase()}*\n\n` +
     `Olá ${cliente?.nome || 'Cliente'}! Segue o detalhamento da proposta:\n\n` +
-    orcamento.itens
+    (orcamento.itens || [])
       .map(
         (it) =>
-          `• ${it.descricao}: ${it.quantidade} ${it.unidade} × R$ ${it.preco_unitario.toFixed(2)} = R$ ${it.total.toFixed(2)}`,
+          `• ${it.descricao}: ${it.quantidade} ${it.unidade} × R$ ${formatarMoedaSegura(it.preco_unitario)} = R$ ${formatarMoedaSegura(it.total)}`,
       )
       .join('\n') +
-    `\n\n*SUBTOTAL:* R$ ${orcamento.subtotal.toFixed(2)}` +
-    (orcamento.desconto > 0 ? `\n*DESCONTO:* R$ ${orcamento.desconto.toFixed(2)}` : '') +
-    `\n*TOTAL FINAL:* R$ ${orcamento.total.toFixed(2)}` +
-    (orcamento.sinal ? `\n*SINAL:* R$ ${orcamento.sinal.toFixed(2)}` : '') +
+    `\n\n*SUBTOTAL:* R$ ${formatarMoedaSegura(orcamento.subtotal)}` +
+    (Number(orcamento.desconto) > 0
+      ? `\n*DESCONTO:* R$ ${formatarMoedaSegura(orcamento.desconto)}`
+      : '') +
+    `\n*TOTAL FINAL:* R$ ${formatarMoedaSegura(orcamento.total)}` +
+    (orcamento.sinal ? `\n*SINAL:* R$ ${formatarMoedaSegura(orcamento.sinal)}` : '') +
     (orcamento.observacoes ? `\n\n_Observações: ${orcamento.observacoes}_` : '') +
     `\n\nJC Construções — Feito para quem constrói.`
 
@@ -215,7 +218,7 @@ export const OrcamentoDetalhe: React.FC = () => {
                       })),
                       valorTotal: orcamento.total,
                       condicoesPagamento: orcamento.sinal
-                        ? `Sinal de R$ ${orcamento.sinal.toFixed(2)} + ${orcamento.parcelas?.length || 1} parcela(s)`
+                        ? `Sinal de R$ ${formatarMoedaSegura(orcamento.sinal)} + ${orcamento.parcelas?.length || 1} parcela(s)`
                         : 'Conforme orçamento aprovado',
                       observacoes: orcamento.observacoes || undefined,
                     },
@@ -317,7 +320,7 @@ export const OrcamentoDetalhe: React.FC = () => {
               Itens do Orçamento:
             </span>
             <div className="border rounded-xl divide-y overflow-hidden">
-              {orcamento.itens.map((it, idx) => (
+              {(orcamento.itens || []).map((it, idx) => (
                 <div
                   key={idx}
                   className="p-3.5 flex items-center justify-between text-sm bg-card hover:bg-muted/20"
@@ -325,10 +328,12 @@ export const OrcamentoDetalhe: React.FC = () => {
                   <div>
                     <span className="font-bold text-foreground block">{it.descricao}</span>
                     <span className="text-xs text-muted-foreground">
-                      {it.quantidade} {it.unidade} × R$ {it.preco_unitario.toFixed(2)}
+                      {it.quantidade} {it.unidade} × R$ {formatarMoedaSegura(it.preco_unitario)}
                     </span>
                   </div>
-                  <span className="font-extrabold text-foreground">R$ {it.total.toFixed(2)}</span>
+                  <span className="font-extrabold text-foreground">
+                    R$ {formatarMoedaSegura(it.total)}
+                  </span>
                 </div>
               ))}
             </div>
@@ -338,17 +343,21 @@ export const OrcamentoDetalhe: React.FC = () => {
           <div className="p-4 rounded-xl bg-muted/40 border space-y-1.5 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal:</span>
-              <span className="font-semibold">R$ {orcamento.subtotal.toFixed(2)}</span>
+              <span className="font-semibold">R$ {formatarMoedaSegura(orcamento.subtotal)}</span>
             </div>
-            {orcamento.desconto > 0 && (
+            {Number(orcamento.desconto) > 0 && (
               <div className="flex justify-between text-destructive">
                 <span>Desconto concedido:</span>
-                <span className="font-semibold">- R$ {orcamento.desconto.toFixed(2)}</span>
+                <span className="font-semibold">
+                  - R$ {formatarMoedaSegura(orcamento.desconto)}
+                </span>
               </div>
             )}
             <div className="flex justify-between text-base font-black text-foreground pt-2 border-t">
               <span>VALOR TOTAL:</span>
-              <span className="text-primary text-xl">R$ {orcamento.total.toFixed(2)}</span>
+              <span className="text-primary text-xl">
+                R$ {formatarMoedaSegura(orcamento.total)}
+              </span>
             </div>
           </div>
 
@@ -362,7 +371,9 @@ export const OrcamentoDetalhe: React.FC = () => {
                 {orcamento.parcelas.map((p) => (
                   <div key={p.numero} className="p-3 rounded-lg border bg-card text-xs space-y-1">
                     <span className="font-bold block">Parcela {p.numero}</span>
-                    <span className="text-sm font-black text-primary">R$ {p.valor.toFixed(2)}</span>
+                    <span className="text-sm font-black text-primary">
+                      R$ {formatarMoedaSegura(p.valor)}
+                    </span>
                     <span className="text-muted-foreground block text-[11px] font-mono">
                       Venc: {p.vencimento}
                     </span>

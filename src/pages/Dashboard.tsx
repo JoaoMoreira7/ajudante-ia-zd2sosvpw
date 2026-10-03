@@ -27,6 +27,7 @@ import { useVoiceContext } from '@/contexts/VoiceContext'
 import { useVoiceHybrid } from '@/hooks/useVoiceHybrid'
 import { obterConsumoAudio, formatarMinutosESegundos } from '@/lib/audioUsageTracker'
 import { obterLimitesPlano } from '@/lib/planLimits'
+import { formatarMoedaSegura, formatarDataSegura, parseDataSegura } from '@/lib/utils'
 
 interface AlertaItem {
   id: string
@@ -98,29 +99,32 @@ export const Dashboard: React.FC = () => {
 
   // 1. Alertas de Obras e Etapas
   obras.forEach((obra) => {
-    if (obra.status === 'em_andamento') {
+    if (obra && obra.status === 'em_andamento') {
       if (obra.previsao_termino) {
-        const dataTermino = new Date(obra.previsao_termino + 'T00:00:00')
-        if (dataTermino < hoje) {
-          alertas.push({
-            id: `obra_vencida_${obra.id}`,
-            tipo: 'etapa_vencida',
-            criticidade: 'alta',
-            titulo: `Prazo final vencido: ${obra.titulo}`,
-            descricao: `Previsão era ${dataTermino.toLocaleDateString('pt-BR')}. Verifique o andamento das etapas.`,
-            link: `/obras/${obra.id}`,
-            tag: 'Obra Vencida',
-          })
-        } else if (dataTermino <= limiteProximo) {
-          alertas.push({
-            id: `obra_prox_${obra.id}`,
-            tipo: 'prazo_proximo',
-            criticidade: 'media',
-            titulo: `Prazo próximo: ${obra.titulo}`,
-            descricao: `Previsão de término em ${dataTermino.toLocaleDateString('pt-BR')} (próximos 3 dias).`,
-            link: `/obras/${obra.id}`,
-            tag: 'Vencendo',
-          })
+        const dataTermino = parseDataSegura(obra.previsao_termino)
+        if (dataTermino) {
+          const dataFormatada = formatarDataSegura(dataTermino) || obra.previsao_termino
+          if (dataTermino < hoje) {
+            alertas.push({
+              id: `obra_vencida_${obra.id}`,
+              tipo: 'etapa_vencida',
+              criticidade: 'alta',
+              titulo: `Prazo final vencido: ${obra.titulo || 'Obra sem nome'}`,
+              descricao: `Previsão era ${dataFormatada}. Verifique o andamento das etapas.`,
+              link: `/obras/${obra.id}`,
+              tag: 'Obra Vencida',
+            })
+          } else if (dataTermino <= limiteProximo) {
+            alertas.push({
+              id: `obra_prox_${obra.id}`,
+              tipo: 'prazo_proximo',
+              criticidade: 'media',
+              titulo: `Prazo próximo: ${obra.titulo || 'Obra sem nome'}`,
+              descricao: `Previsão de término em ${dataFormatada} (próximos 3 dias).`,
+              link: `/obras/${obra.id}`,
+              tag: 'Vencendo',
+            })
+          }
         }
       }
     }
@@ -129,30 +133,34 @@ export const Dashboard: React.FC = () => {
   // 2. Alertas de Pagamentos Atrasados ou Parcelas de Orçamentos (visível se Dono)
   if (isDono) {
     orcamentos.forEach((orc) => {
-      if (orc.parcelas) {
+      if (orc && Array.isArray(orc.parcelas)) {
         orc.parcelas.forEach((parc) => {
-          if (parc.status === 'pendente' && parc.vencimento) {
-            const dataVenc = new Date(parc.vencimento + 'T00:00:00')
-            if (dataVenc < hoje) {
-              alertas.push({
-                id: `parc_atrasada_${orc.id}_${parc.numero}`,
-                tipo: 'pagamento_atrasado',
-                criticidade: 'alta',
-                titulo: `Pagamento atrasado: ${orc.titulo}`,
-                descricao: `Parcela ${parc.numero} de R$ ${parc.valor.toFixed(2)} venceu em ${dataVenc.toLocaleDateString('pt-BR')}.`,
-                link: `/orcamentos/${orc.id}`,
-                tag: 'Atrasado',
-              })
-            } else if (dataVenc <= limiteProximo) {
-              alertas.push({
-                id: `parc_prox_${orc.id}_${parc.numero}`,
-                tipo: 'prazo_proximo',
-                criticidade: 'media',
-                titulo: `Parcela a vencer: ${orc.titulo}`,
-                descricao: `Parcela ${parc.numero} de R$ ${parc.valor.toFixed(2)} vence em ${dataVenc.toLocaleDateString('pt-BR')}.`,
-                link: `/orcamentos/${orc.id}`,
-                tag: 'A Vencer',
-              })
+          if (parc && parc.status === 'pendente' && parc.vencimento) {
+            const dataVenc = parseDataSegura(parc.vencimento)
+            if (dataVenc) {
+              const dataVencFormatada = formatarDataSegura(dataVenc) || parc.vencimento
+              const valorFormatado = formatarMoedaSegura(parc.valor)
+              if (dataVenc < hoje) {
+                alertas.push({
+                  id: `parc_atrasada_${orc.id}_${parc.numero || 1}`,
+                  tipo: 'pagamento_atrasado',
+                  criticidade: 'alta',
+                  titulo: `Pagamento atrasado: ${orc.titulo || 'Orçamento'}`,
+                  descricao: `Parcela ${parc.numero || 1} de R$ ${valorFormatado} venceu em ${dataVencFormatada}.`,
+                  link: `/orcamentos/${orc.id}`,
+                  tag: 'Atrasado',
+                })
+              } else if (dataVenc <= limiteProximo) {
+                alertas.push({
+                  id: `parc_prox_${orc.id}_${parc.numero || 1}`,
+                  tipo: 'prazo_proximo',
+                  criticidade: 'media',
+                  titulo: `Parcela a vencer: ${orc.titulo || 'Orçamento'}`,
+                  descricao: `Parcela ${parc.numero || 1} de R$ ${valorFormatado} vence em ${dataVencFormatada}.`,
+                  link: `/orcamentos/${orc.id}`,
+                  tag: 'A Vencer',
+                })
+              }
             }
           }
         })
@@ -161,13 +169,14 @@ export const Dashboard: React.FC = () => {
 
     // Financeiro com status vencido ou pendente passado
     financeiro.forEach((f) => {
-      if (f.status === 'vencido') {
+      if (f && f.status === 'vencido') {
+        const dataFormatada = formatarDataSegura(f.data) || f.data || 'data não informada'
         alertas.push({
           id: `fin_venc_${f.id}`,
           tipo: 'pagamento_atrasado',
           criticidade: 'alta',
-          titulo: `Lançamento vencido: ${f.descricao}`,
-          descricao: `R$ ${f.valor.toFixed(2)} (${f.tipo === 'entrada' ? 'A receber' : 'A pagar'}) datado de ${f.data}.`,
+          titulo: `Lançamento vencido: ${f.descricao || 'Despesa/Receita'}`,
+          descricao: `R$ ${formatarMoedaSegura(f.valor)} (${f.tipo === 'entrada' ? 'A receber' : 'A pagar'}) datado de ${dataFormatada}.`,
           link: '/financeiro',
           tag: 'Financeiro',
         })
@@ -176,13 +185,13 @@ export const Dashboard: React.FC = () => {
   }
 
   // Cálculos financeiros reais do banco
-  const aReceber = obras.reduce((acc, o) => acc + (o.valor_pendente || 0), 0)
+  const aReceber = obras.reduce((acc, o) => acc + (Number(o?.valor_pendente) || 0), 0)
   const despesas = financeiro
-    .filter((f) => f.tipo === 'saida')
-    .reduce((acc, f) => acc + (f.valor || 0), 0)
+    .filter((f) => f?.tipo === 'saida')
+    .reduce((acc, f) => acc + (Number(f?.valor) || 0), 0)
   const recebido = financeiro
-    .filter((f) => f.tipo === 'entrada')
-    .reduce((acc, f) => acc + (f.valor || 0), 0)
+    .filter((f) => f?.tipo === 'entrada')
+    .reduce((acc, f) => acc + (Number(f?.valor) || 0), 0)
   const resultadoEstimado = recebido - despesas
 
   const nomeExibicao = user?.name || config.nome_profissional || 'Mestre'
@@ -722,10 +731,10 @@ export const Dashboard: React.FC = () => {
                   >
                     <div>
                       <p className="font-semibold text-foreground text-xs sm:text-sm">
-                        {f.descricao}
+                        {f.descricao || 'Lançamento financeiro'}
                       </p>
                       <p className="text-[11px] text-muted-foreground capitalize">
-                        {f.categoria} • {f.data}
+                        {f.categoria || 'Geral'} • {formatarDataSegura(f.data) || f.data || 'Hoje'}
                       </p>
                     </div>
                     <span
@@ -733,7 +742,7 @@ export const Dashboard: React.FC = () => {
                         f.tipo === 'entrada' ? 'text-emerald-600' : 'text-destructive'
                       }`}
                     >
-                      {f.tipo === 'entrada' ? '+' : '-'} R$ {f.valor.toFixed(2)}
+                      {f.tipo === 'entrada' ? '+' : '-'} R$ {formatarMoedaSegura(f.valor)}
                     </span>
                   </div>
                 ))}

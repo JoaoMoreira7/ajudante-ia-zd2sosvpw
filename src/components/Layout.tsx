@@ -69,7 +69,11 @@ export default function Layout() {
 
         {/* Área Central de Conteúdo */}
         <main className="flex-1 pb-20 lg:pb-8 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full min-w-0">
-          <GlobalErrorBoundary>
+          <GlobalErrorBoundary
+            key={location.pathname}
+            fallbackTitle="Tela indisponível no momento"
+            fallbackMessage="Ocorreu um erro ao renderizar este módulo. Toque em 'Recarregar' para atualizar ou volte ao início."
+          >
             <Outlet />
           </GlobalErrorBoundary>
         </main>

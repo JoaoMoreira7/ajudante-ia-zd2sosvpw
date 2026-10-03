@@ -24,33 +24,53 @@ export const WalkieTalkieButton: React.FC<WalkieTalkieButtonProps> = ({
   const recordedDurationRef = useRef<number>(3)
 
   // Feedback auditivo simples com Web Audio API para simular bipe estilo walkie-talkie
+  // Degradação graciosa total: a falta ou bloqueio de áudio NUNCA interfere no render nem lança erro
   const playBeep = (start: boolean) => {
     try {
+      if (typeof window === 'undefined') return
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
       if (!AudioCtx) return
+
       const ctx = new AudioCtx()
+      if (ctx.state === 'suspended') {
+        // Tenta retomar se permitido pela interação do usuário, sem travar se falhar
+        ctx.resume().catch(() => {})
+      }
+
       const osc = ctx.createOscillator()
       const gain = ctx.createGain()
       osc.connect(gain)
       gain.connect(ctx.destination)
 
+      const now = ctx.currentTime || 0
       if (start) {
         // Bipe curto de acionamento walkie-talkie (tom agudo rápido)
-        osc.frequency.setValueAtTime(880, ctx.currentTime) // A5
-        gain.gain.setValueAtTime(0.08, ctx.currentTime)
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12)
-        osc.start()
-        osc.stop(ctx.currentTime + 0.12)
+        osc.frequency.setValueAtTime(880, now) // A5
+        gain.gain.setValueAtTime(0.08, now)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12)
+        osc.start(now)
+        osc.stop(now + 0.12)
       } else {
         // Bipe duplo de liberação ("câmbio/desliga")
-        osc.frequency.setValueAtTime(659.25, ctx.currentTime) // E5
-        gain.gain.setValueAtTime(0.08, ctx.currentTime)
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15)
-        osc.start()
-        osc.stop(ctx.currentTime + 0.15)
+        osc.frequency.setValueAtTime(659.25, now) // E5
+        gain.gain.setValueAtTime(0.08, now)
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15)
+        osc.start(now)
+        osc.stop(now + 0.15)
       }
+
+      // Fecha o contexto após o término para evitar vazamento de recursos no mobile
+      setTimeout(() => {
+        try {
+          if (ctx.state !== 'closed') {
+            ctx.close().catch(() => {})
+          }
+        } catch {
+          /* intentionally ignored */
+        }
+      }, 300)
     } catch (_) {
-      // Ignora erro de áudio se navegador bloquear autoplay
+      // Degradação silenciosa graciosa (sem som se bloqueado ou sem suporte)
     }
   }
 
@@ -65,18 +85,26 @@ export const WalkieTalkieButton: React.FC<WalkieTalkieButtonProps> = ({
   // Iniciar fala (TouchDown ou Click)
   const handleStart = () => {
     if (disabled || isProcessing) return
-    setIsPressing(true)
-    playBeep(true)
-    startListening()
+    try {
+      setIsPressing(true)
+      playBeep(true)
+      startListening()
+    } catch (e) {
+      console.warn('Erro ao acionar início de voz:', e)
+    }
   }
 
   // Finalizar fala e enviar (TouchUp ou Click em desktop)
   const handleStop = () => {
     if (!isPressing && !isListening) return
-    setIsPressing(false)
-    playBeep(false)
-    const dur = stopListening()
-    recordedDurationRef.current = dur
+    try {
+      setIsPressing(false)
+      playBeep(false)
+      const dur = stopListening()
+      recordedDurationRef.current = dur
+    } catch (e) {
+      console.warn('Erro ao finalizar voz:', e)
+    }
   }
 
   // Alternar clique único (especialmente útil no desktop sem touch ou se preferir clique normal)
@@ -160,6 +188,15 @@ export const WalkieTalkieButton: React.FC<WalkieTalkieButtonProps> = ({
               </p>
             )}
           </div>
+        ) : !isSupported ? (
+          <div className="space-y-1">
+            <p className="text-xs sm:text-sm text-muted-foreground font-medium">
+              Toque para falar ou escreva no chat.
+            </p>
+            <p className="text-[11px] text-primary font-semibold">
+              Reconhecimento de voz em modo alternativo no seu aparelho.
+            </p>
+          </div>
         ) : (
           <p className="text-xs sm:text-sm text-muted-foreground font-medium">
             Segure como <strong className="text-foreground">Walkie-Talkie</strong> (ou dê 1 toque).
@@ -167,7 +204,7 @@ export const WalkieTalkieButton: React.FC<WalkieTalkieButtonProps> = ({
             <br />
             <span className="italic">"Chegou 50 saco de cimento e o encanador faltou hoje"</span>
           </p>
-        )}
+        )}{' '}
       </div>
     </div>
   )

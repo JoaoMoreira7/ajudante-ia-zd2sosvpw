@@ -13,6 +13,7 @@ import {
   ShieldAlert,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { formatarMoedaSegura, formatarDataSegura } from '@/lib/utils'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -334,7 +335,7 @@ export const Financeiro: React.FC = () => {
                       {item.descricao}
                     </span>
                     <span className="text-xs text-muted-foreground capitalize">
-                      {item.categoria} • {item.data}
+                      {item.categoria} • {formatarDataSegura(item.data) || item.data}
                     </span>
                   </div>
                 </div>
@@ -343,7 +344,7 @@ export const Financeiro: React.FC = () => {
                     item.tipo === 'entrada' ? 'text-emerald-600' : 'text-destructive'
                   }`}
                 >
-                  {item.tipo === 'entrada' ? '+' : '-'} R$ {item.valor.toFixed(2)}
+                  {item.tipo === 'entrada' ? '+' : '-'} R$ {formatarMoedaSegura(item.valor)}
                 </span>
               </div>
             </Card>
