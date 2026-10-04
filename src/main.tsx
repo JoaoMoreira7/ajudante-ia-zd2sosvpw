@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './main.css'
 
-const CURRENT_APP_VERSION = '0.0.19'
+const CURRENT_APP_VERSION = '0.0.21'
 
 // Invalidação de caches obsoletos, desregistro de service workers legados
 // e auto-recuperação contra chunk load error / HTML desatualizado em dispositivos móveis

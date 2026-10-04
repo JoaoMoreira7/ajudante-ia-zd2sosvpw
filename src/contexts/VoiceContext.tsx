@@ -110,16 +110,9 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       {
         id: 'welcome',
         autor: 'ajudante',
-        texto: 'Olá! Sou o Ajudante IA. Você fala e eu entendo, calculo e organizo.',
+        texto:
+          'Olá, mestre! Tudo bem? Estou por aqui para te ajudar no que precisar: tirar dúvidas, fazer contas de materiais, anotar o dia a dia da obra ou organizar os gastos. Pode falar ou digitar do seu jeito!',
         timestamp: Date.now(),
-        detalhes: {
-          sugestoes: [
-            'Calcula uma parede de 8 por 3',
-            'Tira a porta de 80 por 210',
-            'Quanto de piso preciso para 30 metros?',
-            'Registra uma saída de 350 reais de material',
-          ],
-        },
       },
     ]
   })
@@ -168,15 +161,8 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       {
         id: 'ctx_clear_' + Date.now(),
         autor: 'ajudante',
-        texto: 'Conversa renovada! O que você gostaria de calcular ou organizar agora?',
+        texto: 'Conversa limpa! O que você precisar agora, é só falar ou mandar mensagem aqui.',
         timestamp: Date.now(),
-        detalhes: {
-          sugestoes: [
-            'Calcula parede de 5 por 3',
-            'Quanto de piso para 25 metros?',
-            'Registra saída de material',
-          ],
-        },
       },
     ])
   }, [profile?.id])

@@ -4,6 +4,7 @@ import { useVoiceHybrid } from '@/hooks/useVoiceHybrid'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   Mic,
+  MicOff,
   Send,
   RotateCcw,
   AlertTriangle,
@@ -20,8 +21,9 @@ import {
   Search,
   X,
   ArrowDownCircle,
-  Layers,
   MessageSquare,
+  CheckCheck,
+  Radio,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -70,7 +72,7 @@ export const Falar: React.FC = () => {
   })
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine)
   const [consumoAudio, setConsumoAudio] = useState(() => obterConsumoAudio(profile?.id))
-  const [modoEntrada, setModoEntrada] = useState<'walkie' | 'teclado'>('walkie')
+  const [modoEntradaVoz, setModoEntradaVoz] = useState<'walkie' | 'campo'>('campo')
 
   // Estado da busca unificada (conversas e cálculos)
   const [termoBusca, setTermoBusca] = useState<string>(() => searchParams.get('busca') || '')
@@ -80,9 +82,9 @@ export const Falar: React.FC = () => {
 
   const chatBottomRef = useRef<HTMLDivElement>(null)
   const buscaInputRef = useRef<HTMLInputElement>(null)
+  const textInputRef = useRef<HTMLTextAreaElement>(null)
 
   const limites = obterLimitesPlano(plano)
-  const minutosUsados = consumoAudio.segundosUsados / 60
 
   // Monitorar conectividade de rede
   useEffect(() => {
@@ -110,11 +112,11 @@ export const Falar: React.FC = () => {
     setResultadosBusca(res)
   }, [termoBusca, interactions, profile?.id, isOperador])
 
-  // Se veio parâmetro de busca na URL, foca o input
+  // Se veio parâmetro de busca na URL, abre e foca o input
   useEffect(() => {
     const q = searchParams.get('busca')
     if (q) {
-      setTermoBusca(q)
+      setTermoBusca(q === '1' ? '' : q)
       setBuscaAtiva(true)
       setTimeout(() => {
         buscaInputRef.current?.focus()
@@ -122,7 +124,7 @@ export const Falar: React.FC = () => {
     }
   }, [searchParams])
 
-  // Auto-scroll ao receber nova mensagem (apenas se busca não estiver ativa com rolagem)
+  // Auto-scroll ao receber nova mensagem ou atualizar processamento
   useEffect(() => {
     if (!termoBusca.trim()) {
       chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -149,11 +151,14 @@ export const Falar: React.FC = () => {
     })
   }
 
-  // Ao encerrar a fala pelo botão secundário, envia para o interpretador
+  // Preenche ou envia transcrição por voz do microfone no campo
   useEffect(() => {
     if (transcript && !isListening) {
-      processUserInput(transcript, 4)
-      setConsumoAudio(obterConsumoAudio(profile?.id))
+      const trimmed = transcript.trim()
+      if (trimmed) {
+        processUserInput(trimmed, 4)
+        setConsumoAudio(obterConsumoAudio(profile?.id))
+      }
     }
   }, [transcript, isListening, processUserInput, profile?.id])
 
@@ -164,7 +169,6 @@ export const Falar: React.FC = () => {
   }
 
   // Leitura em voz alta automática (TTS) de toda resposta do assistente (essencial para quem não lê)
-  // Executado em micro-task para garantir que o texto já esteja completamente renderizado na tela antes do sintetizador falar
   const lastSpokenInteractionIdRef = useRef<string | null>(null)
   useEffect(() => {
     if (ttsEnabled && interactions.length > 0 && !isProcessing) {
@@ -175,7 +179,6 @@ export const Falar: React.FC = () => {
         lastSpokenInteractionIdRef.current !== last.id
       ) {
         lastSpokenInteractionIdRef.current = last.id
-        // Deixa a renderização do DOM completar no próximo frame antes de disparar o áudio
         const timer = setTimeout(() => {
           speakText(last.texto)
         }, 120)
@@ -200,46 +203,53 @@ export const Falar: React.FC = () => {
     setInputText('')
     stopSpeaking()
     processUserInput(msg)
+    // Redefine altura do textarea
+    if (textInputRef.current) {
+      textInputRef.current.style.height = 'auto'
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSendText()
+    }
   }
 
   const isModoSimples = config?.modo === 'simples'
 
   return (
-    <div className="max-w-3xl mx-auto flex flex-col h-[calc(100vh-8.5rem)] sm:h-[calc(100vh-7.5rem)]">
-      {/* Cabeçalho do Chat Ajudante IA */}
-      <div className="shrink-0 p-3.5 sm:p-4 rounded-2xl bg-card border border-border shadow-xs mb-3 flex flex-wrap items-center justify-between gap-2">
+    <div className="max-w-3xl mx-auto flex flex-col h-[calc(100dvh-8.5rem)] sm:h-[calc(100dvh-7.5rem)]">
+      {/* Topo do Chat estilo WhatsApp */}
+      <div className="shrink-0 p-3 sm:p-3.5 rounded-2xl bg-card border border-border shadow-xs mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-primary/10 text-primary flex items-center justify-center font-black">
-            <Sparkles className="w-6 h-6 text-primary animate-pulse" />
+          <div className="relative">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black shadow-xs">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <span
+              className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-background ${
+                isOnline ? 'bg-emerald-500' : 'bg-amber-500'
+              }`}
+            />
           </div>
+
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-black text-foreground tracking-tight">
-                AJUDANTE IA
+              <h1 className="text-sm sm:text-base font-black text-foreground tracking-tight">
+                Ajudante IA
               </h1>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              <span className="text-[10px] font-bold text-muted-foreground uppercase">
-                {isOnline ? 'Online' : 'Offline'}
+              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                {isProcessing ? 'digitando...' : isOnline ? 'online' : 'offline'}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {isModoSimples
-                ? 'Você fala e o Ajudante responde com voz clara e contas certas.'
-                : 'Chat inteligente com voz, motor determinístico e precisão nos números.'}
-            </p>
-            {/* Contador discreto de minutos de áudio consumidos no mês */}
-            <div className="flex items-center gap-1.5 mt-1 text-[11px] font-semibold text-muted-foreground">
-              <Clock className="w-3 h-3 text-primary" />
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
+              <Clock className="w-3 h-3 text-emerald-600" />
               <span>
-                Voz:{' '}
-                <strong className="text-foreground">
-                  {formatarMinutosESegundos(consumoAudio.segundosUsados)}
-                </strong>{' '}
-                de{' '}
+                Voz: <strong>{formatarMinutosESegundos(consumoAudio.segundosUsados)}</strong> de{' '}
                 {limites.maxMinutosAudioMes === -1
                   ? 'Ilimitado'
-                  : `${limites.maxMinutosAudioMes} min`}{' '}
-                este mês
+                  : `${limites.maxMinutosAudioMes} min`}
               </span>
               {(() => {
                 const est = calcularEstadoConsumoAudio(
@@ -268,11 +278,28 @@ export const Falar: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
+          {/* Alternar modo Walkie-Talkie expandido */}
+          <Button
+            type="button"
+            variant={modoEntradaVoz === 'walkie' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setModoEntradaVoz(modoEntradaVoz === 'walkie' ? 'campo' : 'walkie')}
+            title={
+              modoEntradaVoz === 'walkie'
+                ? 'Voltar ao chat WhatsApp padrão'
+                : 'Abrir botão Walkie-Talkie grande'
+            }
+            className="h-8 sm:h-9 px-2.5 rounded-xl text-xs font-bold gap-1 cursor-pointer"
+          >
+            <Radio className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Walkie-Talkie</span>
+          </Button>
+
           {/* Botão de abrir/fechar Busca no Histórico */}
           <Button
             type="button"
-            variant={buscaAtiva ? 'default' : 'outline'}
+            variant={buscaAtiva ? 'default' : 'ghost'}
             size="sm"
             onClick={() => {
               setBuscaAtiva(!buscaAtiva)
@@ -281,13 +308,13 @@ export const Falar: React.FC = () => {
               }
             }}
             title="Buscar em conversas e cálculos anteriores"
-            className="h-9 px-3 rounded-xl text-xs font-bold gap-1.5 cursor-pointer shadow-xs"
+            className="h-8 sm:h-9 px-2.5 rounded-xl text-xs font-bold gap-1 cursor-pointer"
           >
-            <Search className="w-4 h-4" />
-            <span>Buscar</span>
+            <Search className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Buscar</span>
           </Button>
 
-          {/* Botão de alternar leitura em voz alta (TTS) */}
+          {/* Leitura em voz alta (TTS) */}
           <Button
             type="button"
             variant="ghost"
@@ -296,13 +323,12 @@ export const Falar: React.FC = () => {
               if (ttsEnabled) stopSpeaking()
               setTtsEnabled(!ttsEnabled)
             }}
-            title={ttsEnabled ? 'Desativar leitura por voz' : 'Ativar leitura por voz'}
-            className={`h-9 px-2.5 rounded-xl text-xs font-bold gap-1.5 ${
-              ttsEnabled ? 'text-primary bg-primary/10' : 'text-muted-foreground'
+            title={ttsEnabled ? 'Silenciar voz da IA' : 'Ativar voz da IA'}
+            className={`h-8 sm:h-9 px-2 rounded-xl text-xs font-bold gap-1 ${
+              ttsEnabled ? 'text-emerald-600 bg-emerald-500/10' : 'text-muted-foreground'
             }`}
           >
-            {ttsEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            <span className="hidden sm:inline">{ttsEnabled ? 'Voz Ligada' : 'Voz Silenciada'}</span>
+            {ttsEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
           </Button>
 
           {canUndo && (
@@ -310,10 +336,10 @@ export const Falar: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={() => undoLastAction()}
-              className="h-9 px-2.5 rounded-xl text-xs gap-1.5 border-muted-foreground/30 font-bold"
+              title="Desfazer última alteração"
+              className="h-8 sm:h-9 px-2 rounded-xl text-xs gap-1 border-muted-foreground/30 font-bold"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Desfazer</span>
             </Button>
           )}
 
@@ -321,23 +347,22 @@ export const Falar: React.FC = () => {
             variant="ghost"
             size="sm"
             onClick={clearContext}
-            title="Começar uma nova conversa e limpar histórico de tela"
-            className="h-9 px-2.5 rounded-xl text-xs text-muted-foreground hover:text-foreground font-semibold gap-1"
+            title="Começar uma nova conversa"
+            className="h-8 sm:h-9 px-2 rounded-xl text-xs text-muted-foreground hover:text-foreground font-semibold"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Limpar</span>
           </Button>
         </div>
       </div>
 
-      {/* CAMPO FIXO DE BUSCA NO TOPO DO HISTÓRICO (TELA FALAR) */}
+      {/* CAMPO DE BUSCA NO TOPO DO HISTÓRICO (QUANDO ABERTO) */}
       {buscaAtiva && (
-        <div className="shrink-0 mb-3 p-3 sm:p-4 rounded-2xl bg-card border-2 border-primary/40 shadow-sm space-y-3">
+        <div className="shrink-0 mb-2 p-3 sm:p-3.5 rounded-2xl bg-card border-2 border-emerald-500/40 shadow-sm space-y-2.5">
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Search className="w-4 h-4 text-primary" />
-              <span className="text-xs sm:text-sm font-black uppercase text-foreground">
-                Buscar no que já conversamos ou calculamos
+            <div className="flex items-center gap-1.5">
+              <Search className="w-4 h-4 text-emerald-600" />
+              <span className="text-xs font-black uppercase text-foreground">
+                Buscar no histórico de mensagens e cálculos
               </span>
             </div>
             <button
@@ -346,7 +371,7 @@ export const Falar: React.FC = () => {
                 limparBusca()
                 setBuscaAtiva(false)
               }}
-              className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 p-1 rounded-md"
+              className="text-xs font-bold text-muted-foreground hover:text-foreground flex items-center gap-1 p-1 rounded-md cursor-pointer"
             >
               <X className="w-4 h-4" />
               <span className="hidden sm:inline">Fechar</span>
@@ -359,100 +384,74 @@ export const Falar: React.FC = () => {
               type="text"
               value={termoBusca}
               onChange={(e) => setTermoBusca(e.target.value)}
-              placeholder="Buscar no que já conversamos... (ex: cimento, parede, 24m, piso)"
-              className={`w-full h-12 sm:h-13 pl-11 pr-10 rounded-xl border-2 border-border bg-background font-medium focus:outline-hidden focus:border-primary shadow-inner ${
-                isModoSimples ? 'text-base sm:text-lg' : 'text-sm sm:text-base'
-              }`}
+              placeholder="Digite o que procura... (ex: cimento, parede, 24m, piso)"
+              className="w-full h-11 pl-10 pr-9 rounded-xl border border-border bg-background text-sm font-medium focus:outline-hidden focus:border-emerald-500 shadow-inner"
             />
-            <Search className="w-5 h-5 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             {termoBusca && (
               <button
                 type="button"
                 onClick={limparBusca}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
-          {/* Dica amigável e atalhos rápidos de busca para quem tem baixa leitura */}
-          {!termoBusca && (
-            <div className="space-y-1.5 pt-1">
-              <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block">
-                Toques rápidos para encontrar fácil:
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {['cimento', 'parede', 'bloco', 'piso', 'reboco', 'concreto', 'areia'].map(
-                  (tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => setTermoBusca(tag)}
-                      className="text-xs px-3 py-1.5 rounded-full bg-muted hover:bg-primary/10 hover:text-primary font-bold border border-border transition-colors cursor-pointer"
-                    >
-                      🔍 {tag}
-                    </button>
-                  ),
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* RESULTADOS DA BUSCA EM TEMPO REAL */}
+          {/* RESULTADOS DA BUSCA */}
           {termoBusca.trim() && (
-            <div className="space-y-2 pt-2 border-t border-border">
+            <div className="space-y-2 pt-1 border-t border-border">
               <div className="flex items-center justify-between text-xs font-bold text-muted-foreground">
                 <span>
                   {resultadosBusca.length === 0
                     ? 'Nenhum resultado'
                     : `${resultadosBusca.length} item(s) encontrado(s)`}
                 </span>
-                <span className="text-[11px] font-medium">Ignora acentos e maiúsculas</span>
+                <span className="text-[10px] font-medium">Tolerante a acentos e maiúsculas</span>
               </div>
 
               {resultadosBusca.length === 0 ? (
-                <div className="p-4 sm:p-5 rounded-xl bg-muted/40 border border-dashed border-border text-center space-y-2">
-                  <p className="text-base sm:text-lg font-black text-foreground">
+                <div className="p-3 rounded-xl bg-muted/40 border border-dashed border-border text-center space-y-1">
+                  <p className="text-sm font-bold text-foreground">
                     Não achei nada com essa palavra.
                   </p>
-                  <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto">
-                    Tente falar de outro jeito ou confira se escreveu com outra palavraparecida
-                    (como "parede", "bloco" ou "cimento").
+                  <p className="text-xs text-muted-foreground">
+                    Tente buscar por palavras da obra como "cimento", "bloco" ou "parede".
                   </p>
                 </div>
               ) : (
-                <div className="max-h-64 sm:max-h-80 overflow-y-auto space-y-2.5 pr-1">
+                <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
                   {resultadosBusca.map((item) => (
                     <div
                       key={item.id}
-                      className="p-3 sm:p-3.5 rounded-xl bg-background border border-border hover:border-primary/50 shadow-xs transition-all space-y-2"
+                      className="p-2.5 sm:p-3 rounded-xl bg-background border border-border hover:border-emerald-500/50 shadow-xs transition-all space-y-1.5"
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <span
-                            className={`p-1.5 rounded-lg text-xs font-black flex items-center gap-1 ${
+                            className={`p-1 rounded-md text-[10px] font-black flex items-center gap-1 ${
                               item.tipoItem === 'calculo'
                                 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
                                 : item.tipoItem === 'conversa_usuario'
-                                  ? 'bg-primary/15 text-primary'
-                                  : 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                  : 'bg-primary/15 text-primary'
                             }`}
                           >
                             {item.tipoItem === 'calculo' ? (
                               <>
-                                <Calculator className="w-3.5 h-3.5" />
+                                <Calculator className="w-3 h-3" />
                                 <span>CÁLCULO</span>
                               </>
                             ) : item.tipoItem === 'conversa_usuario' ? (
                               <>
-                                <MessageSquare className="w-3.5 h-3.5" />
-                                <span>VOCÊ DISSE</span>
+                                <MessageSquare className="w-3 h-3" />
+                                <span>VOCÊ</span>
                               </>
                             ) : (
                               <>
-                                <Sparkle className="w-3.5 h-3.5" />
-                                <span>AJUDANTE IA</span>
+                                <Sparkle className="w-3 h-3" />
+                                <span>AJUDANTE</span>
                               </>
                             )}
                           </span>
@@ -465,37 +464,20 @@ export const Falar: React.FC = () => {
                         </span>
                       </div>
 
-                      {item.detalhe && (
-                        <p className="text-xs text-muted-foreground font-medium bg-muted/30 px-2.5 py-1 rounded-md">
-                          <strong>Entrada:</strong> {item.detalhe}
-                        </p>
-                      )}
-
-                      <p
-                        className={`font-semibold text-foreground leading-snug ${
-                          isModoSimples ? 'text-sm sm:text-base' : 'text-xs sm:text-sm'
-                        }`}
-                      >
+                      <p className="text-xs font-semibold text-foreground leading-snug">
                         {item.conteudoPrincipal}
                       </p>
 
-                      {item.formula && (
-                        <div className="text-[11px] font-mono text-primary bg-primary/5 px-2 py-1 rounded-md">
-                          📐 {item.formula}
-                        </div>
-                      )}
-
-                      {/* Ações acessíveis do item: Rolar até mensagem ou Ouvir em voz alta */}
                       <div className="flex items-center justify-between pt-1 border-t border-border/50 gap-2">
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
                           onClick={() => speakText(item.ttsTexto)}
-                          className="h-8 px-2.5 rounded-lg text-xs font-bold text-primary hover:bg-primary/10 gap-1.5 cursor-pointer"
+                          className="h-7 px-2 rounded-lg text-xs font-bold text-emerald-600 hover:bg-emerald-500/10 gap-1 cursor-pointer"
                         >
-                          <Volume2 className="w-3.5 h-3.5" />
-                          <span>Ouvir resumo</span>
+                          <Volume2 className="w-3 h-3" />
+                          <span>Ouvir</span>
                         </Button>
 
                         {item.origemId && (
@@ -503,12 +485,10 @@ export const Falar: React.FC = () => {
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => {
-                              rolarAteMensagem(item.origemId)
-                            }}
-                            className="h-8 px-2.5 rounded-lg text-xs font-bold gap-1 cursor-pointer"
+                            onClick={() => rolarAteMensagem(item.origemId)}
+                            className="h-7 px-2 rounded-lg text-xs font-bold gap-1 cursor-pointer"
                           >
-                            <ArrowDownCircle className="w-3.5 h-3.5" />
+                            <ArrowDownCircle className="w-3 h-3" />
                             <span>Ver na conversa</span>
                           </Button>
                         )}
@@ -522,121 +502,118 @@ export const Falar: React.FC = () => {
         </div>
       )}
 
-      {/* Aviso de Operador ou Aviso de Offline */}
+      {/* Avisos de conectividade e perfil */}
       {!isOnline && (
-        <div className="shrink-0 mb-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 text-xs flex items-center gap-2">
+        <div className="shrink-0 mb-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 text-xs flex items-center gap-2">
           <WifiOff className="w-4 h-4 shrink-0 text-amber-600" />
           <span>
-            <strong>Sem internet:</strong> o assistente usa o motor de cálculos e banco de dados
-            local offline. A conversa com a IA em nuvem volta assim que conectar.
+            <strong>Sem internet:</strong> o assistente usa o motor de cálculos offline. A conversa
+            com a nuvem volta assim que conectar.
           </span>
         </div>
       )}
 
       {isOperador && (
-        <div className="shrink-0 mb-3 p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-900 dark:text-blue-200 text-xs flex items-center gap-2">
+        <div className="shrink-0 mb-2 p-2 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-900 dark:text-blue-200 text-xs flex items-center gap-2">
           <Info className="w-4 h-4 shrink-0 text-blue-600" />
           <span>
-            Perfil <strong>Operador</strong> ativo: você pode calcular materiais, apontar diário e
-            ver obras. Valores financeiros e saldos são restritos ao Dono.
+            Perfil <strong>Operador</strong> ativo: você conversa e calcula tudo. Valores
+            financeiros são restritos ao Dono.
           </span>
         </div>
       )}
 
-      {/* Área Principal de Conversa (Scrollable Chat) */}
-      <div className="flex-1 overflow-y-auto space-y-4 p-3 sm:p-4 rounded-2xl bg-card/60 border border-border shadow-inner">
-        {interactions.map((msg) => (
-          <div
-            id={`chat-msg-${msg.id}`}
-            key={msg.id}
-            className={`flex flex-col transition-all duration-300 ${
-              itemDestacadoId === msg.id ? 'ring-4 ring-primary ring-offset-2 rounded-3xl' : ''
-            } ${msg.autor === 'usuario' ? 'items-end' : 'items-start'}`}
-          >
-            {msg.autor === 'usuario' ? (
+      {/* ÁREA DE MENSAGENS ESTILO WHATSAPP (Fundo suave, bolhas alternadas, timestamps discretos) */}
+      <div className="flex-1 overflow-y-auto space-y-3 p-3 sm:p-4 rounded-2xl bg-muted/30 border border-border/80 shadow-inner">
+        {interactions.map((msg) => {
+          const isUser = msg.autor === 'usuario'
+          const horaStr = new Date(msg.timestamp).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+          })
+
+          return (
+            <div
+              id={`chat-msg-${msg.id}`}
+              key={msg.id}
+              className={`flex flex-col transition-all duration-300 ${
+                itemDestacadoId === msg.id
+                  ? 'ring-4 ring-emerald-500 ring-offset-2 rounded-2xl'
+                  : ''
+              } ${isUser ? 'items-end' : 'items-start'}`}
+            >
               <div
-                className={`max-w-[85%] sm:max-w-[80%] p-3.5 sm:p-4 rounded-3xl rounded-br-xs bg-primary text-primary-foreground font-semibold shadow-xs ${
-                  isModoSimples ? 'text-base sm:text-lg' : 'text-sm sm:text-base'
-                } ${itemDestacadoId === msg.id ? 'bg-primary/90 shadow-lg' : ''}`}
+                className={`max-w-[88%] sm:max-w-[78%] rounded-2xl shadow-xs transition-shadow relative ${
+                  isUser
+                    ? 'bg-emerald-600 text-white rounded-tr-xs p-3 sm:p-3.5'
+                    : 'bg-card text-card-foreground border border-border/90 rounded-tl-xs p-3.5 sm:p-4'
+                }`}
               >
-                <div className="text-[11px] font-black uppercase tracking-wider opacity-85 mb-1 flex items-center gap-1">
-                  <span>VOCÊ DISSE:</span>
-                </div>
-                <div>{msg.texto}</div>
-              </div>
-            ) : (
-              <div className="max-w-[95%] sm:max-w-[88%] w-full p-4 sm:p-5 rounded-3xl rounded-bl-xs bg-card border border-border shadow-xs space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                      <Calculator className="w-4 h-4" />
+                {/* Nome do remetente discreto para o Ajudante */}
+                {!isUser && (
+                  <div className="flex items-center justify-between gap-2 mb-1.5 pb-1 border-b border-border/40">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-5 h-5 rounded-full bg-emerald-600/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <Sparkles className="w-3 h-3" />
+                      </div>
+                      <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                        Ajudante IA
+                      </span>
                     </div>
-                    <span className="text-xs sm:text-sm font-black text-foreground tracking-tight">
-                      AJUDANTE IA
-                    </span>
-                  </div>
 
-                  {msg.tipoCalculo && (
-                    <Badge
-                      variant="secondary"
-                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
-                        msg.tipoCalculo === 'EXATO'
-                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                    {msg.tipoCalculo && (
+                      <Badge
+                        variant="secondary"
+                        className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0 rounded-md ${
+                          msg.tipoCalculo === 'EXATO'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                            : msg.tipoCalculo === 'ESTIMATIVA'
+                              ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                              : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                        }`}
+                      >
+                        {msg.tipoCalculo === 'EXATO'
+                          ? 'Cálculo Exato'
                           : msg.tipoCalculo === 'ESTIMATIVA'
-                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
-                            : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-300 dark:border-blue-800'
-                      }`}
-                    >
-                      {msg.tipoCalculo === 'EXATO'
-                        ? 'CÁLCULO EXATO'
-                        : msg.tipoCalculo === 'ESTIMATIVA'
-                          ? 'ESTIMATIVA MÉDIA'
-                          : 'INFORMAÇÃO TÉCNICA'}
-                    </Badge>
-                  )}
-                </div>
+                            ? 'Estimativa'
+                            : 'Orientação'}
+                      </Badge>
+                    )}
+                  </div>
+                )}
 
-                {/* Conteúdo textual da resposta com acessibilidade para leitura */}
+                {/* Conteúdo textual da mensagem */}
                 <div
-                  className={`font-medium text-foreground whitespace-pre-line leading-relaxed ${
+                  className={`font-normal whitespace-pre-line leading-relaxed ${
                     isModoSimples ? 'text-base sm:text-lg' : 'text-sm sm:text-base'
-                  }`}
+                  } ${isUser ? 'text-white' : 'text-foreground'}`}
                 >
                   {msg.texto}
                 </div>
 
-                {/* MELHORIA 2: Confirmação visual em cards coloridos compactos por item reconhecido */}
+                {/* Cards de ação rápida integrados nos bastidores */}
                 {msg.cardsAcao && msg.cardsAcao.length > 0 && (
-                  <ActionCardList
-                    cards={msg.cardsAcao}
-                    onSpeak={(tts) => speakText(tts)}
-                    isSimpleMode={isModoSimples}
-                  />
-                )}
-
-                {/* Feedback de jargão técnico corrigido */}
-                {msg.detalhes?.correcoesGlossario && msg.detalhes.correcoesGlossario.length > 0 && (
-                  <div className="text-[11px] text-muted-foreground bg-muted/30 px-2.5 py-1 rounded-md flex items-center gap-1.5">
-                    <Sparkles className="w-3 h-3 text-primary" />
-                    <span>
-                      Jargão de obra identificado:{' '}
-                      {msg.detalhes.correcoesGlossario.map((c) => c.termoDetectado).join(', ')}
-                    </span>
+                  <div className="mt-2.5">
+                    <ActionCardList
+                      cards={msg.cardsAcao}
+                      onSpeak={(tts) => speakText(tts)}
+                      isSimpleMode={isModoSimples}
+                    />
                   </div>
                 )}
 
-                {/* Fórmula exata se houver */}
+                {/* Fórmula se houver cálculo matemático determinístico */}
                 {msg.detalhes?.formula && (
-                  <div className="p-3 rounded-xl bg-muted/60 font-mono text-xs sm:text-sm font-bold text-foreground border border-border/50">
+                  <div className="mt-2 p-2 sm:p-2.5 rounded-xl bg-muted/60 font-mono text-xs font-bold text-foreground border border-border/50">
                     📐 {msg.detalhes.formula}
                   </div>
                 )}
 
-                {/* Passos do cálculo determinístico */}
+                {/* Detalhamento dos passos do cálculo se houver */}
                 {msg.detalhes?.passos && msg.detalhes.passos.length > 0 && (
-                  <div className="text-xs sm:text-sm text-muted-foreground space-y-1 bg-muted/20 p-3 rounded-xl border border-border/40">
-                    <span className="font-bold text-foreground block text-xs">
-                      Detalhamento do cálculo:
+                  <div className="mt-2 text-xs text-muted-foreground space-y-0.5 bg-muted/20 p-2 sm:p-2.5 rounded-xl border border-border/40">
+                    <span className="font-bold text-foreground block text-[11px]">
+                      Passos da conta:
                     </span>
                     {msg.detalhes.passos.map((p, idx) => (
                       <p key={idx}>• {p}</p>
@@ -644,52 +621,34 @@ export const Falar: React.FC = () => {
                   </div>
                 )}
 
-                {/* Aviso técnico */}
+                {/* Aviso técnico legal se aplicável */}
                 {msg.detalhes?.aviso && (
-                  <div className="p-3 rounded-xl bg-amber-500/10 text-amber-900 dark:text-amber-300 text-xs sm:text-sm flex items-start gap-2 border border-amber-500/20">
-                    <Info className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div className="mt-2 p-2 rounded-xl bg-amber-500/10 text-amber-900 dark:text-amber-300 text-xs flex items-start gap-1.5 border border-amber-500/20">
+                    <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                     <span>{msg.detalhes.aviso}</span>
                   </div>
                 )}
 
-                {/* Botão para ouvir a resposta novamente */}
-                <div className="flex items-center justify-between pt-1 border-t border-border/40">
-                  <button
-                    type="button"
-                    onClick={() => speakText(msg.texto)}
-                    className="text-xs text-muted-foreground hover:text-primary font-bold flex items-center gap-1.5 transition-colors py-1 px-2 rounded-lg hover:bg-muted/50 cursor-pointer"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                    <span>Ouvir novamente</span>
-                  </button>
-                  <span className="text-[10px] text-muted-foreground">
-                    {new Date(msg.timestamp).toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-
-                {/* Bloco de Confirmação Obrigatória */}
+                {/* Bloco de Confirmação Obrigatória (ex: valores >= R$ 1.000) */}
                 {msg.detalhes?.confirmacaoNecessaria && currentPendingConfirm?.id === msg.id && (
-                  <div className="p-4 rounded-2xl border-2 border-primary bg-primary/5 space-y-3">
-                    <p className="text-xs sm:text-sm font-bold text-primary flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 shrink-0" />
-                      Confirmação de operação segura:
+                  <div className="mt-3 p-3 rounded-xl border-2 border-emerald-500 bg-emerald-500/5 space-y-2">
+                    <p className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-emerald-600 shrink-0" />
+                      Confirmação necessária:
                     </p>
                     <div className="flex gap-2">
                       <Button
-                        size="lg"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex-1 h-12 rounded-xl text-sm sm:text-base cursor-pointer"
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex-1 h-10 rounded-xl text-xs sm:text-sm cursor-pointer"
                         onClick={confirmCurrentAction}
                       >
-                        <CheckCircle className="w-4 h-4 mr-1.5" />
+                        <CheckCircle className="w-4 h-4 mr-1" />
                         Sim, Confirmar
                       </Button>
                       <Button
-                        size="lg"
+                        size="sm"
                         variant="outline"
-                        className="border-destructive/40 text-destructive flex-1 font-bold h-12 rounded-xl text-sm sm:text-base cursor-pointer"
+                        className="border-destructive/40 text-destructive flex-1 font-bold h-10 rounded-xl text-xs sm:text-sm cursor-pointer"
                         onClick={rejectCurrentAction}
                       >
                         Cancelar
@@ -698,38 +657,47 @@ export const Falar: React.FC = () => {
                   </div>
                 )}
 
-                {/* Sugestões de continuação da conversa */}
-                {msg.detalhes?.sugestoes && msg.detalhes.sugestoes.length > 0 && (
-                  <div className="pt-2 border-t border-border/40">
-                    <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider block mb-2">
-                      Continuar a partir daqui:
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {msg.detalhes.sugestoes.map((sug, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => processUserInput(sug)}
-                          className="text-xs sm:text-sm px-3.5 py-1.5 rounded-full bg-primary/10 hover:bg-primary/20 text-primary font-semibold border border-primary/20 transition-all hover:scale-[1.02] cursor-pointer"
-                        >
-                          {sug}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+                {/* Linha de rodapé da bolha: Ouvir novamente e Timestamp com tique */}
+                <div
+                  className={`flex items-center justify-between pt-1.5 mt-1 border-t gap-2 ${
+                    isUser
+                      ? 'border-white/20 text-white/80'
+                      : 'border-border/30 text-muted-foreground'
+                  }`}
+                >
+                  {!isUser ? (
+                    <button
+                      type="button"
+                      onClick={() => speakText(msg.texto)}
+                      className="text-[11px] font-bold flex items-center gap-1 hover:text-emerald-600 transition-colors py-0.5 px-1 rounded-md hover:bg-muted/40 cursor-pointer"
+                    >
+                      <Volume2 className="w-3 h-3" />
+                      <span>Ouvir</span>
+                    </button>
+                  ) : (
+                    <span />
+                  )}
 
+                  <div className="flex items-center gap-1 text-[10px] font-medium ml-auto">
+                    <span>{horaStr}</span>
+                    {isUser && <CheckCheck className="w-3.5 h-3.5 text-white/90" />}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+
+        {/* Indicador de "digitando..." enquanto a IA processa */}
         {isProcessing && (
-          <div className="flex items-center gap-3 p-4 rounded-2xl bg-card border border-border w-fit shadow-xs">
-            <span className="w-3 h-3 rounded-full bg-primary animate-ping" />
-            <span className="text-xs sm:text-sm font-bold text-primary tracking-wide">
-              {statusText === 'ENTENDENDO...'
-                ? 'AJUDANTE IA PROCESSANDO COM MOTOR DETERMINÍSTICO...'
-                : 'PENSANDO...'}
+          <div className="flex items-center gap-2 p-3 rounded-2xl rounded-tl-xs bg-card border border-border/80 w-fit shadow-xs">
+            <div className="flex items-center gap-1 px-1">
+              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-bounce [animation-delay:-0.3s]" />
+              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-bounce [animation-delay:-0.15s]" />
+              <span className="w-2 h-2 rounded-full bg-emerald-600 animate-bounce" />
+            </div>
+            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+              Ajudante está digitando...
             </span>
           </div>
         )}
@@ -739,16 +707,16 @@ export const Falar: React.FC = () => {
 
       {/* Erro de Microfone */}
       {speechError && (
-        <div className="shrink-0 my-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2 border border-amber-200 dark:border-amber-900">
+        <div className="shrink-0 my-1.5 p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2 border border-amber-200 dark:border-amber-900">
           <AlertTriangle className="w-4 h-4 shrink-0" />
           <span>{speechError}</span>
         </div>
       )}
 
-      {/* Área Inferior: Botão Walkie-Talkie Principal + Alternância Rápida para Teclado */}
-      <div className="shrink-0 pt-2 space-y-2">
-        {modoEntrada === 'walkie' ? (
-          <div className="bg-card border border-border/80 rounded-2xl p-2 shadow-sm">
+      {/* PAINEL OPCIONAL: Walkie-Talkie expandido se o usuário ativou */}
+      {modoEntradaVoz === 'walkie' && (
+        <div className="shrink-0 pt-2 pb-1">
+          <div className="bg-card border border-border rounded-2xl p-2.5 shadow-sm space-y-2">
             <WalkieTalkieButton
               onSendMessage={handleWalkieSend}
               isProcessing={isProcessing}
@@ -758,52 +726,72 @@ export const Falar: React.FC = () => {
               segundosUsados={consumoAudio.segundosUsados}
               maxMinutos={limites.maxMinutosAudioMes}
             />
-            <div className="text-center pb-1">
+            <div className="text-center">
               <button
                 type="button"
-                onClick={() => setModoEntrada('teclado')}
+                onClick={() => setModoEntradaVoz('campo')}
                 className="text-xs text-muted-foreground hover:text-foreground font-semibold underline cursor-pointer"
               >
-                Prefere digitar? Abrir teclado
+                Voltar ao campo normal de digitação
               </button>
             </div>
           </div>
-        ) : (
-          <div className="bg-card border border-border/80 rounded-2xl p-3 shadow-sm space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-muted-foreground">Digitar mensagem:</span>
-              <button
-                type="button"
-                onClick={() => setModoEntrada('walkie')}
-                className="text-xs text-primary font-bold flex items-center gap-1 hover:underline cursor-pointer"
-              >
-                <Mic className="w-3.5 h-3.5" />
-                Voltar para o Walkie-Talkie
-              </button>
-            </div>
+        </div>
+      )}
 
-            {/* Entrada de Texto com letras grandes para acessibilidade */}
-            <form onSubmit={handleSendText} className="flex gap-2">
-              <input
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder="Ex: Parede de 6 por 2,80 ou Chegou 50 saco de cimento..."
-                className={`flex-1 h-12 sm:h-13 px-4 rounded-xl border border-input bg-card font-medium focus:outline-hidden focus:ring-2 focus:ring-primary shadow-xs ${
-                  isModoSimples ? 'text-base sm:text-lg' : 'text-sm sm:text-base'
-                }`}
-              />
-              <Button
-                type="submit"
-                disabled={!inputText.trim() || isProcessing}
-                className="h-12 sm:h-13 px-5 sm:px-6 font-black rounded-xl text-sm sm:text-base cursor-pointer"
-              >
-                <Send className="w-4 h-4 mr-1.5" />
-                Enviar
-              </Button>
-            </form>
-          </div>
-        )}
+      {/* CAMPO DE MENSAGEM FIXO EMBAIXO ESTILO WHATSAPP */}
+      <div className="shrink-0 pt-2">
+        <form
+          onSubmit={handleSendText}
+          className="flex items-end gap-2 p-1.5 sm:p-2 rounded-2xl bg-card border border-border shadow-sm"
+        >
+          {/* Botão de gravação/ditado por voz */}
+          {isSupported && (
+            <button
+              type="button"
+              onClick={handleMicToggle}
+              title={isListening ? 'Parar gravação' : 'Falar mensagem por voz'}
+              className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                isListening
+                  ? 'bg-red-600 text-white animate-pulse shadow-md'
+                  : 'bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80'
+              }`}
+            >
+              {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+            </button>
+          )}
+
+          {/* Campo de texto livre que cresce suavemente até 4 linhas */}
+          <textarea
+            ref={textInputRef}
+            rows={1}
+            value={inputText}
+            onChange={(e) => {
+              setInputText(e.target.value)
+              e.target.style.height = 'auto'
+              e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder={
+              isListening
+                ? 'Ouvindo... pode falar à vontade'
+                : 'Mensagem (fale ou digite qualquer dúvida, conta ou serviço)...'
+            }
+            className={`flex-1 min-h-[44px] max-h-[120px] py-2.5 px-3 rounded-xl border border-input bg-background font-medium focus:outline-hidden focus:ring-2 focus:ring-emerald-500 resize-none leading-relaxed ${
+              isModoSimples ? 'text-base sm:text-lg' : 'text-sm sm:text-base'
+            }`}
+          />
+
+          {/* Botão de envio estilo WhatsApp */}
+          <button
+            type="submit"
+            disabled={!inputText.trim() || isProcessing}
+            title="Enviar mensagem"
+            className="w-11 h-11 shrink-0 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white flex items-center justify-center transition-all shadow-xs cursor-pointer"
+          >
+            <Send className="w-5 h-5" />
+          </button>
+        </form>
       </div>
     </div>
   )
