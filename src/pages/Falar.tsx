@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button'
 import { WalkieTalkieButton } from '@/components/WalkieTalkieButton'
 import { ActionCardList } from '@/components/ActionCardList'
 import { ReciboCard } from '@/components/ReciboCard'
+import { TarefasELembretesModal } from '@/components/TarefasELembretesModal'
 import {
   obterConsumoAudio,
   formatarMinutosESegundos,
@@ -70,6 +71,10 @@ export const Falar: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [inputText, setInputText] = useState('')
+  const [modalTarefasOpen, setModalTarefasOpen] = useState(false)
+  const [initialTabTarefas, setInitialTabTarefas] = useState<'tarefas' | 'lembretes' | 'tetos'>(
+    'tarefas',
+  )
   const [ttsEnabled, setTtsEnabled] = useState<boolean>(() => {
     return config?.voz_respostas !== false
   })
@@ -223,6 +228,11 @@ export const Falar: React.FC = () => {
 
   return (
     <div className="max-w-3xl mx-auto flex flex-col h-[calc(100dvh-8.5rem)] sm:h-[calc(100dvh-7.5rem)]">
+      <TarefasELembretesModal
+        open={modalTarefasOpen}
+        onOpenChange={setModalTarefasOpen}
+        initialTab={initialTabTarefas}
+      />
       {/* Topo do Chat estilo WhatsApp */}
       <div className="shrink-0 p-3 sm:p-3.5 rounded-2xl bg-card border border-border shadow-xs mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
@@ -282,6 +292,22 @@ export const Falar: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2">
+          {/* Atalho para Tarefas & Lembretes */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setInitialTabTarefas('tarefas')
+              setModalTarefasOpen(true)
+            }}
+            title="Ver tarefas da obra e lembretes"
+            className="h-8 sm:h-9 px-2.5 rounded-xl text-xs font-bold gap-1 cursor-pointer border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/10"
+          >
+            <CheckCheck className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Tarefas</span>
+          </Button>
+
           {/* Alternar modo Walkie-Talkie expandido */}
           <Button
             type="button"

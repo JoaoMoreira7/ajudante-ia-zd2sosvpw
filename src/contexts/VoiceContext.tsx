@@ -29,6 +29,23 @@ import { parsePreferenciaConversa, aplicarPreferenciaAoTexto } from '@/lib/prefe
 import { calcularParcelamento, parseParcelamentoOuRecorrencia } from '@/lib/recorrenciasEngine'
 import { calcularQuemMeDeve, identificarBaixaRecebimento } from '@/lib/quemMeDeveEngine'
 import { gerarResumoSemana, verificarAlertaPadraoGasto } from '@/lib/resumoSemanalEngine'
+import {
+  extrairTarefaDeFrase,
+  ordenarFilaTarefas,
+  identificarTarefaParaBaixa,
+} from '@/lib/tarefasEngine'
+import {
+  parseDefinicaoTeto,
+  verificarTetoCategoria,
+  calcularMediaGastosCategoria,
+} from '@/lib/tetoEngine'
+import { parseLembreteRecorrente, identificarLembreteParaCancelamento } from '@/lib/lembretesEngine'
+import { parseContaAPagar, calcularQuemEstouDevendo } from '@/lib/contasAPagarEngine'
+import {
+  verificarDuplicidadeGastoMesmoDia,
+  verificarRecorrenciasNaoLancadas,
+} from '@/lib/alertasPadraoEngine'
+import { gerarResumoManha, deveExibirResumoManhaHoje } from '@/lib/resumoManhaEngine'
 
 export type CardAcaoTipo = 'material' | 'ocorrencia' | 'financeiro' | 'calculo' | 'aviso'
 
@@ -131,6 +148,49 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   React.useEffect(() => {
     salvarChatPersistido(interactions, profile?.id || 'local_user')
   }, [interactions, profile?.id])
+
+  // RESUMO DA MANHÃ AUTOMÁTICO NO PRIMEIRO ACESSO DO DIA (Offline-friendly)
+  React.useEffect(() => {
+    const dispararResumoManhaSeNecessario = async () => {
+      try {
+        const horaCfg = config?.resumo_manha_hora || 6
+        const ultimoData = config?.ultimo_resumo_manha_data
+        if (!deveExibirResumoManhaHoje(ultimoData, horaCfg)) return
+
+        const tarefas = await localDB.getAll('tarefas_obra')
+        const lembretes = await localDB.getAll('lembretes_obra')
+        const financeiro = await localDB.getAll('financeiro')
+        const materiais = await localDB.getAll('materiais_estoque')
+
+        const resumo = gerarResumoManha(tarefas, lembretes, financeiro, materiais, isOperador)
+
+        // Atualiza a data do último resumo para não repetir no mesmo dia
+        await localDB.put('configuracoes', {
+          ...config,
+          ultimo_resumo_manha_data: resumo.dataHojeStr,
+        })
+
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'resumo_manha_' + Date.now(),
+            autor: 'ajudante',
+            texto: resumo.textoFormatado,
+            tipoCalculo: 'TECNICA',
+            timestamp: Date.now(),
+            detalhes: {
+              ttsTexto: resumo.ttsTexto,
+              sugestoes: ['Quais as tarefas?', 'Ouvir resumo', 'Quem me deve?'],
+            },
+          },
+        ])
+      } catch {
+        /* intentionally ignored */
+      }
+    }
+
+    dispararResumoManhaSeNecessario()
+  }, [config, isOperador])
   const [conversationId, setConversationId] = useState<string | null>(() => {
     return localStorage.getItem('ajudante_chat_conv_id') || null
   })
@@ -398,6 +458,610 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return
       } catch {
         // Fallback se edição falhar
+      }
+    }
+
+    // B.1 PARCELAMENTOS E RECORRÊNCIAS DETERMINÍSTICOS ("comprei em 3x de 500", "aluguel 200 todo mês")
+    const parcOuRec = parseParcelamentoOuRecorrencia(text)
+    if (parcOuRec) {
+      if (parcOuRec.tipo === 'parcelamento' && !isOperador) {
+        const p = parcOuRec.params
+        const plano = calcularParcelamento(
+          p.numParcelas,
+          p.valorParcela,
+          p.valorTotal,
+          p.descricao,
+          'outros',
+        )
+        const grupoId = 'grp_' + Date.now()
+
+        // Registra cada parcela no financeiro local
+        for (const parc of plano.parcelas) {
+          await mutateEntity('financeiro', 'create', {
+            id: 'fin_' + Date.now() + '_' + parc.numero,
+            owner_id: pb.authStore.model?.id || 'local_user',
+            tipo: 'saida',
+            categoria: 'outros',
+            descricao: parc.descricao,
+            valor: parc.valor,
+            data: parc.dataVencimento,
+            status: parc.numero === 1 ? 'pago' : 'pendente',
+            parcela_atual: parc.numero,
+            total_parcelas: plano.totalParcelas,
+            grupo_parcelamento_id: grupoId,
+          })
+        }
+
+        const novoRecibo: ReciboItem = {
+          id: 'rec_' + Date.now(),
+          tipo: 'gasto',
+          entidade: 'financeiro',
+          entidadeId: grupoId,
+          titulo: 'Compra Parcelada Registrada',
+          descricao: `${plano.descricaoBase} (${plano.totalParcelas}x de R$ ${plano.valorParcela.toFixed(2)})`,
+          valor: plano.valorTotal,
+          categoria: 'outros',
+          data: new Date().toISOString().split('T')[0],
+          status: 'Gravado com sucesso',
+          timestamp: Date.now(),
+        }
+        setUltimoRecibo(novoRecibo)
+
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'resp_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Compra parcelada gravada com sucesso!\n\n• ${plano.totalParcelas} parcelas de R$ ${plano.valorParcela.toFixed(2)}\n• Valor total: R$ ${plano.valorTotal.toFixed(2)}\n• Primeira parcela registrada hoje e as próximas a cada 30 dias.`,
+            tipoCalculo: 'EXATO',
+            timestamp: Date.now(),
+            recibo: novoRecibo,
+            detalhes: {
+              sugestoes: ['Desfaz', 'Quem está me devendo?', 'Consultar saldo'],
+            },
+          },
+        ])
+        return
+      }
+
+      if (parcOuRec.tipo === 'recorrente' && !isOperador) {
+        const p = parcOuRec.params
+        const novoId = 'fin_' + Date.now()
+        await mutateEntity('financeiro', 'create', {
+          id: novoId,
+          owner_id: pb.authStore.model?.id || 'local_user',
+          tipo: 'saida',
+          categoria: 'outros',
+          descricao: p.descricao,
+          valor: p.valor,
+          data: new Date().toISOString().split('T')[0],
+          status: 'pago',
+          recorrente: true,
+          dia_vencimento: p.diaVencimento,
+        })
+
+        const novoRecibo: ReciboItem = {
+          id: 'rec_' + Date.now(),
+          tipo: 'gasto',
+          entidade: 'financeiro',
+          entidadeId: novoId,
+          titulo: 'Gasto Recorrente Registrado',
+          descricao: `${p.descricao} (todo dia ${p.diaVencimento})`,
+          valor: p.valor,
+          categoria: 'outros',
+          data: new Date().toISOString().split('T')[0],
+          status: 'Ativo mensalmente',
+          timestamp: Date.now(),
+        }
+        setUltimoRecibo(novoRecibo)
+
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'resp_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Gasto recorrente ativado: "${p.descricao}" no valor de R$ ${p.valor.toFixed(2)} todo mês (dia ${p.diaVencimento}). Vou te lembrar se ele não for lançado no dia!`,
+            tipoCalculo: 'EXATO',
+            timestamp: Date.now(),
+            recibo: novoRecibo,
+            detalhes: {
+              sugestoes: ['Desfaz', 'Ver financeiro', 'Quem eu estou devendo?'],
+            },
+          },
+        ])
+        return
+      }
+    }
+
+    // B.2 TETO POR CATEGORIA DE GASTO ("define um orçamento de 800 por mês pra material")
+    const intencaoTeto = parseDefinicaoTeto(text)
+    if (intencaoTeto) {
+      if (isOperador) {
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'teto_op_' + Date.now(),
+            autor: 'ajudante',
+            texto:
+              'Seu perfil de acesso é Operador. A definição e consulta de tetos orçamentários é reservada ao Dono.',
+            timestamp: Date.now(),
+          },
+        ])
+        return
+      }
+
+      if (intencaoTeto.removerTeto) {
+        const tetosAtuais = { ...(config?.teto_categorias || {}) }
+        delete tetosAtuais[intencaoTeto.categoria]
+        await localDB.put('configuracoes', {
+          ...config,
+          teto_categorias: tetosAtuais,
+        })
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'teto_rem_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Teto de gastos para ${intencaoTeto.categoria} removido com sucesso.`,
+            timestamp: Date.now(),
+          },
+        ])
+        return
+      }
+
+      if (intencaoTeto.valor && intencaoTeto.valor > 0) {
+        const tetosAtuais = { ...(config?.teto_categorias || {}) }
+        tetosAtuais[intencaoTeto.categoria] = intencaoTeto.valor
+        await localDB.put('configuracoes', {
+          ...config,
+          teto_categorias: tetosAtuais,
+        })
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'teto_set_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Teto definido com sucesso! Orçamento de R$ ${intencaoTeto.valor.toFixed(2)} por mês para ${intencaoTeto.categoria}. Vou te avisar a partir de 70% consumido!`,
+            tipoCalculo: 'EXATO',
+            timestamp: Date.now(),
+            detalhes: {
+              sugestoes: ['Consultar saldo', 'Quais as tarefas?', 'Registra uma despesa'],
+            },
+          },
+        ])
+        return
+      }
+
+      if (intencaoTeto.solicitarSugestaoMedia) {
+        const historico = await localDB.getAll('financeiro')
+        const media = calcularMediaGastosCategoria(intencaoTeto.categoria, historico)
+        const valorSugerido = media > 0 ? media : 500
+
+        const confirmacaoAcao = async () => {
+          const tetosAtuais = { ...(config?.teto_categorias || {}) }
+          tetosAtuais[intencaoTeto.categoria] = valorSugerido
+          await localDB.put('configuracoes', {
+            ...config,
+            teto_categorias: tetosAtuais,
+          })
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'teto_gravado_' + Date.now(),
+              autor: 'ajudante',
+              texto: `Beleza! Teto de R$ ${valorSugerido.toFixed(2)} definido para ${intencaoTeto.categoria}.`,
+              timestamp: Date.now(),
+            },
+          ])
+        }
+
+        const confirmMsg: ChatInteraction = {
+          id: 'confirm_teto_' + Date.now(),
+          autor: 'ajudante',
+          texto: `A média de gastos dos últimos meses com ${intencaoTeto.categoria} foi de R$ ${valorSugerido.toFixed(2)}. Posso definir esse valor como seu teto mensal?`,
+          timestamp: Date.now(),
+          detalhes: {
+            confirmacaoNecessaria: true,
+            acaoPendente: confirmacaoAcao,
+            sugestoes: ['Pode', 'Cancela'],
+          },
+        }
+        setCurrentPendingConfirm(confirmMsg)
+        setInteractions((prev) => [...prev, confirmMsg])
+        return
+      }
+    }
+
+    // B.3 CONTAS A PAGAR / EMPRÉSTIMOS DE TERCEIROS ("peguei 300 do Zé", "quem eu estou devendo?", "paguei os 300 do Zé")
+    const finTodos = await localDB.getAll('financeiro')
+    const intencaoConta = parseContaAPagar(text, finTodos)
+    if (intencaoConta) {
+      if (intencaoConta.tipo === 'consulta_dividas') {
+        const relatorio = calcularQuemEstouDevendo(finTodos, isOperador)
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'dividas_' + Date.now(),
+            autor: 'ajudante',
+            texto: relatorio.textoFormatado,
+            tipoCalculo: 'EXATO',
+            timestamp: Date.now(),
+            detalhes: {
+              sugestoes: ['Quem está me devendo?', 'Quais as tarefas?', 'Consultar saldo'],
+            },
+          },
+        ])
+        return
+      }
+
+      if (intencaoConta.tipo === 'baixa_divida') {
+        if (isOperador) {
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'divida_op_' + Date.now(),
+              autor: 'ajudante',
+              texto: 'Seu perfil é Operador. A baixa de contas a pagar é restrita ao Dono.',
+              timestamp: Date.now(),
+            },
+          ])
+          return
+        }
+
+        if (intencaoConta.lancamentoAlvo) {
+          const alvo = intencaoConta.lancamentoAlvo
+          await mutateEntity('financeiro', 'update', {
+            ...alvo,
+            status: 'pago',
+          })
+
+          const rec: ReciboItem = {
+            id: 'rec_' + Date.now(),
+            tipo: 'gasto',
+            entidade: 'financeiro',
+            entidadeId: alvo.id,
+            titulo: 'Conta a Pagar Baixada',
+            descricao: `Pagamento para ${alvo.credor_nome || alvo.descricao}`,
+            valor: alvo.valor,
+            data: new Date().toISOString().split('T')[0],
+            status: 'Pago e quitado',
+            timestamp: Date.now(),
+          }
+          setUltimoRecibo(rec)
+
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'baixa_divida_ok_' + Date.now(),
+              autor: 'ajudante',
+              texto: `Pagamento registrado com sucesso! Conta de R$ ${alvo.valor.toFixed(2)} quitada com ${alvo.credor_nome || 'o credor'}.`,
+              tipoCalculo: 'EXATO',
+              timestamp: Date.now(),
+              recibo: rec,
+              detalhes: {
+                sugestoes: ['Quem eu estou devendo?', 'Consultar saldo', 'Desfaz'],
+              },
+            },
+          ])
+          return
+        } else {
+          // Cria lançamento de saída para a baixa
+          const v = intencaoConta.valor || 0
+          const cred = intencaoConta.credorNome || 'Credor'
+          const novoId = 'fin_' + Date.now()
+          await mutateEntity('financeiro', 'create', {
+            id: novoId,
+            owner_id: pb.authStore.model?.id || 'local_user',
+            tipo: 'saida',
+            categoria: 'outros',
+            descricao: `Pagamento de empréstimo: ${cred}`,
+            valor: v,
+            data: new Date().toISOString().split('T')[0],
+            status: 'pago',
+            credor_nome: cred,
+          })
+
+          const rec: ReciboItem = {
+            id: 'rec_' + Date.now(),
+            tipo: 'gasto',
+            entidade: 'financeiro',
+            entidadeId: novoId,
+            titulo: 'Pagamento de Empréstimo',
+            descricao: `Pago a ${cred}`,
+            valor: v,
+            data: new Date().toISOString().split('T')[0],
+            status: 'Quitado',
+            timestamp: Date.now(),
+          }
+          setUltimoRecibo(rec)
+
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'baixa_divida_reg_' + Date.now(),
+              autor: 'ajudante',
+              texto: `Registrado pagamento de R$ ${v.toFixed(2)} para ${cred}.`,
+              tipoCalculo: 'EXATO',
+              timestamp: Date.now(),
+              recibo: rec,
+              detalhes: {
+                sugestoes: ['Quem eu estou devendo?', 'Desfaz'],
+              },
+            },
+          ])
+          return
+        }
+      }
+
+      if (intencaoConta.tipo === 'cadastro_divida') {
+        if (isOperador) {
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'divida_op_' + Date.now(),
+              autor: 'ajudante',
+              texto: 'Seu perfil é Operador. O cadastro de contas a pagar é restrito ao Dono.',
+              timestamp: Date.now(),
+            },
+          ])
+          return
+        }
+
+        const v = intencaoConta.valor || 0
+        const cred = intencaoConta.credorNome || 'Credor'
+        const desc = intencaoConta.descricao || `Dívida com ${cred}`
+        const novoId = 'fin_' + Date.now()
+
+        const executeCadastroDivida = async () => {
+          await mutateEntity('financeiro', 'create', {
+            id: novoId,
+            owner_id: pb.authStore.model?.id || 'local_user',
+            tipo: 'saida',
+            categoria: 'outros',
+            descricao: desc,
+            valor: v,
+            data: new Date().toISOString().split('T')[0],
+            status: 'pendente',
+            credor_nome: cred,
+          })
+
+          const rec: ReciboItem = {
+            id: 'rec_' + Date.now(),
+            tipo: 'gasto',
+            entidade: 'financeiro',
+            entidadeId: novoId,
+            titulo: 'Conta a Pagar Cadastrada',
+            descricao: desc,
+            valor: v,
+            categoria: 'outros',
+            data: new Date().toISOString().split('T')[0],
+            status: 'Pendente de pagamento',
+            timestamp: Date.now(),
+          }
+          setUltimoRecibo(rec)
+        }
+
+        if (v >= 1000) {
+          const confirmMsg: ChatInteraction = {
+            id: 'confirm_divida_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Deseja registrar uma conta a pagar de R$ ${v.toFixed(2)} para ${cred}?`,
+            timestamp: Date.now(),
+            detalhes: {
+              confirmacaoNecessaria: true,
+              acaoPendente: async () => {
+                await executeCadastroDivida()
+              },
+              sugestoes: ['Pode', 'Cancela'],
+            },
+          }
+          setCurrentPendingConfirm(confirmMsg)
+          setInteractions((prev) => [...prev, confirmMsg])
+          return
+        } else {
+          await executeCadastroDivida()
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'divida_gravada_' + Date.now(),
+              autor: 'ajudante',
+              texto: `Conta a pagar registrada: R$ ${v.toFixed(2)} com ${cred}. Você pode consultar quando quiser dizendo "quem eu estou devendo?".`,
+              tipoCalculo: 'EXATO',
+              timestamp: Date.now(),
+              recibo: ultimoRecibo || undefined,
+              detalhes: {
+                sugestoes: ['Quem eu estou devendo?', 'Desfaz'],
+              },
+            },
+          ])
+          return
+        }
+      }
+    }
+
+    // B.4 LEMBRETES QUE VOLTAM SOZINHOS ("me lembra de medir o nível todo dia às 6h")
+    const lembreteParsed = parseLembreteRecorrente(text)
+    if (lembreteParsed) {
+      if (lembreteParsed.isConsulta) {
+        const lembretes = await localDB.getAll('lembretes_obra')
+        const ativos = lembretes.filter((l) => l.ativo)
+        let msg = ''
+        if (ativos.length === 0) {
+          msg =
+            'Você não tem nenhum lembrete ativo no momento. Para criar, diga "me lembra de [tarefa] todo dia às [hora]".'
+        } else {
+          msg =
+            'Aqui estão seus lembretes programados:\n\n' +
+            ativos
+              .map(
+                (l, idx) =>
+                  `• ${l.titulo} — ${l.frequencia === 'diaria' ? 'Todo dia' : l.frequencia === 'semanal' ? 'Semanal' : 'Uma vez'} às ${l.horario || '08:00'}`,
+              )
+              .join('\n')
+        }
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'lembrete_list_' + Date.now(),
+            autor: 'ajudante',
+            texto: msg,
+            timestamp: Date.now(),
+            detalhes: {
+              sugestoes: ['Quais as tarefas?', 'Resumo da manhã'],
+            },
+          },
+        ])
+        return
+      }
+
+      if (lembreteParsed.termoCancelamento) {
+        const lembretes = await localDB.getAll('lembretes_obra')
+        const alvo = identificarLembreteParaCancelamento(
+          lembreteParsed.termoCancelamento,
+          lembretes,
+        )
+        if (alvo) {
+          await localDB.delete('lembretes_obra', alvo.id)
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'lembrete_cancel_' + Date.now(),
+              autor: 'ajudante',
+              texto: `Lembrete "${alvo.titulo}" cancelado com sucesso.`,
+              timestamp: Date.now(),
+            },
+          ])
+          return
+        }
+      }
+
+      if (lembreteParsed.titulo) {
+        const novoLembreteId = 'lem_' + Date.now()
+        await localDB.put('lembretes_obra', {
+          id: novoLembreteId,
+          owner_id: pb.authStore.model?.id || 'local_user',
+          titulo: lembreteParsed.titulo,
+          horario: lembreteParsed.horario,
+          frequencia: lembreteParsed.frequencia,
+          dia_semana: lembreteParsed.diaSemana,
+          dia_mes: lembreteParsed.diaMes,
+          ativo: true,
+        })
+
+        const freqTexto =
+          lembreteParsed.frequencia === 'diaria'
+            ? 'todo dia'
+            : lembreteParsed.frequencia === 'semanal'
+              ? 'toda semana'
+              : 'agendado'
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'lembrete_novo_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Lembrete gravado! Vou te lembrar de "${lembreteParsed.titulo}" ${freqTexto} às ${lembreteParsed.horario || '08:00'}.`,
+            tipoCalculo: 'EXATO',
+            timestamp: Date.now(),
+            detalhes: {
+              sugestoes: ['Ver lembretes', 'Quais as tarefas?', 'Desfaz'],
+            },
+          },
+        ])
+        return
+      }
+    }
+
+    // B.5 TAREFAS POR VOZ ("recado vira tarefa" / "marca tarefa como feita")
+    const tarefaParsed = extrairTarefaDeFrase(text)
+    if (tarefaParsed) {
+      if (tarefaParsed.termoBuscaBaixa) {
+        const tarefas = await localDB.getAll('tarefas_obra')
+        const alvo = identificarTarefaParaBaixa(tarefaParsed.termoBuscaBaixa, tarefas)
+        if (alvo) {
+          await localDB.put('tarefas_obra', {
+            ...alvo,
+            status: 'concluida',
+            concluida_em: new Date().toISOString(),
+          })
+
+          const rec: ReciboItem = {
+            id: 'rec_' + Date.now(),
+            tipo: 'atividade',
+            entidade: 'diario_obra',
+            entidadeId: alvo.id,
+            titulo: 'Tarefa Concluída',
+            descricao: alvo.titulo,
+            data: new Date().toISOString().split('T')[0],
+            status: 'Concluída com sucesso',
+            timestamp: Date.now(),
+          }
+          setUltimoRecibo(rec)
+
+          setInteractions((prev) => [
+            ...prev,
+            {
+              id: 'tarefa_feita_' + Date.now(),
+              autor: 'ajudante',
+              texto: `Tarefa concluída com sucesso: "${alvo.titulo}". Boa, mestre!`,
+              tipoCalculo: 'EXATO',
+              timestamp: Date.now(),
+              recibo: rec,
+              detalhes: {
+                sugestoes: ['Quais as tarefas?', 'Desfaz'],
+              },
+            },
+          ])
+          return
+        }
+      }
+
+      if (tarefaParsed.titulo && !tarefaParsed.termoBuscaBaixa) {
+        const novaTarefaId = 'tar_' + Date.now()
+        const obras = await localDB.getAll('obras')
+        const obraAlvo = obras[0]
+
+        await localDB.put('tarefas_obra', {
+          id: novaTarefaId,
+          owner_id: pb.authStore.model?.id || 'local_user',
+          obra_id: obraAlvo?.id,
+          titulo: tarefaParsed.titulo,
+          prazo: tarefaParsed.prazo,
+          prioridade: tarefaParsed.prioridade,
+          status: 'pendente',
+          origem_fala: text,
+        })
+
+        const rec: ReciboItem = {
+          id: 'rec_' + Date.now(),
+          tipo: 'atividade',
+          entidade: 'diario_obra',
+          entidadeId: novaTarefaId,
+          titulo: 'Tarefa Criada por Voz',
+          descricao: tarefaParsed.titulo,
+          data: tarefaParsed.prazo || new Date().toISOString().split('T')[0],
+          status: `Prioridade: ${tarefaParsed.prioridade}`,
+          timestamp: Date.now(),
+        }
+        setUltimoRecibo(rec)
+
+        const prazoFormatado = tarefaParsed.prazo
+          ? ` (prazo: ${tarefaParsed.prazo.split('-').reverse().join('/')})`
+          : ''
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'tarefa_criada_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Recado transformado em tarefa: "${tarefaParsed.titulo}"${prazoFormatado} com prioridade ${tarefaParsed.prioridade}. Está na sua fila de tarefas!`,
+            tipoCalculo: 'EXATO',
+            timestamp: Date.now(),
+            recibo: rec,
+            detalhes: {
+              sugestoes: ['Quais as tarefas?', 'Resumo da manhã', 'Desfaz'],
+            },
+          },
+        ])
+        return
       }
     }
 
@@ -1451,10 +2115,127 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         respostaTexto =
           'Seu perfil de acesso é Operador. O registro de custos e saídas financeiras é restrito ao Dono da obra.'
         tipoBadge = 'EXATO'
+      } else if (parsed.intent === 'registrar_saida' && !isOperador) {
+        const val = parsed.params.valor || 0
+        const desc = parsed.params.descricao || 'Despesa de obra'
+        const cat = parsed.params.categoria || 'outros'
+        const finList = await localDB.getAll('financeiro')
+
+        // 1. Verificação de teto por categoria
+        const alertaTeto = verificarTetoCategoria(cat, val, config?.teto_categorias, finList)
+
+        // 2. Verificação de gasto fora da média (categoria, valor, historico)
+        const alertaMedia = verificarAlertaPadraoGasto(cat, val, finList)
+
+        // 3. Verificação de gasto duplicado no mesmo dia
+        const alertaDuplicado = verificarDuplicidadeGastoMesmoDia(val, cat, desc, finList)
+
+        let idCriado = ''
+        const executeSaida = async () => {
+          idCriado = await mutateEntity('financeiro', 'create', {
+            id: 'fin_' + Date.now(),
+            owner_id: pb.authStore.model?.id || 'local_user',
+            tipo: 'saida',
+            categoria: cat,
+            descricao: desc,
+            valor: val,
+            data: new Date().toISOString().split('T')[0],
+            status: 'pago',
+          })
+          pushUndo({
+            id: 'undo_' + Date.now(),
+            descricao: `Saída de R$ ${val.toFixed(2)} (${desc})`,
+            timestamp: Date.now(),
+            desfazer: async () => {
+              await mutateEntity('financeiro', 'delete', { id: idCriado })
+            },
+          })
+
+          const rec: ReciboItem = {
+            id: 'rec_' + Date.now(),
+            tipo: 'gasto',
+            entidade: 'financeiro',
+            entidadeId: idCriado,
+            titulo: 'Despesa Registrada',
+            descricao: desc,
+            valor: val,
+            categoria: cat,
+            data: new Date().toISOString().split('T')[0],
+            status: 'Gravado com sucesso',
+            timestamp: Date.now(),
+          }
+          setUltimoRecibo(rec)
+        }
+
+        if (val >= 1000) {
+          const confirmMsg: ChatInteraction = {
+            id: 'confirm_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Deseja confirmar o registro de saída de R$ ${val.toFixed(2)} (${desc})?`,
+            timestamp: Date.now(),
+            detalhes: {
+              confirmacaoNecessaria: true,
+              acaoPendente: executeSaida,
+              sugestoes: ['Sim, confirmar', 'Cancela'],
+            },
+          }
+          setCurrentPendingConfirm(confirmMsg)
+          setInteractions((prev) => [...prev, confirmMsg])
+          return
+        } else {
+          await executeSaida()
+          const avisos: string[] = []
+          if (alertaTeto?.mensagemAviso) avisos.push(alertaTeto.mensagemAviso)
+          if (alertaDuplicado?.mensagem) avisos.push(alertaDuplicado.mensagem)
+          else if (alertaMedia) avisos.push(alertaMedia)
+
+          respostaTexto = `Registrada despesa de R$ ${val.toFixed(2)} (${desc}).`
+          if (avisos.length > 0) {
+            respostaTexto += '\n\n' + avisos.join('\n\n')
+          }
+          tipoBadge = 'EXATO'
+          sugestoes = ['Desfaz', 'Consultar saldo', 'Quem eu estou devendo?']
+        }
       } else if (parsed.intent === 'registrar_entrada' && isOperador) {
         respostaTexto =
           'Seu perfil de acesso é Operador. O registro de pagamentos e entradas financeiras é restrito ao Dono da obra.'
         tipoBadge = 'EXATO'
+      } else if (parsed.intent === 'consultar_tarefas') {
+        const tarefasList = await localDB.getAll('tarefas_obra')
+        const fila = ordenarFilaTarefas(tarefasList)
+        const pendentes = fila.filter((t) => t.status === 'pendente')
+        if (pendentes.length === 0) {
+          respostaTexto = 'Nenhuma tarefa pendente na fila! Tudo em dia na obra.'
+        } else {
+          const hojeIso = new Date().toISOString().split('T')[0]
+          const linhas = pendentes.map((t) => {
+            const isVencida = t.prazo && t.prazo < hojeIso
+            const prazoTxt = t.prazo ? ` (prazo: ${t.prazo.split('-').reverse().join('/')})` : ''
+            const tagVencida = isVencida ? ' ⚠️ VENCIDA' : ''
+            return `• [${t.prioridade.toUpperCase()}] ${t.titulo}${prazoTxt}${tagVencida}`
+          })
+          respostaTexto = `Aqui estão as tarefas pendentes da obra:\n\n${linhas.join('\n')}\n\nPara concluir qualquer uma, é só dizer "marca a tarefa de [nome] como feita".`
+        }
+        tipoBadge = 'EXATO'
+        sugestoes = ['Resumo da manhã', 'Quem está me devendo?', 'Novo lembrete']
+      } else if (parsed.intent === 'resumo_manha') {
+        const tarefasList = await localDB.getAll('tarefas_obra')
+        const lembretesList = await localDB.getAll('lembretes_obra')
+        const finList = await localDB.getAll('financeiro')
+        const matList = await localDB.getAll('materiais_estoque')
+        const resumo = gerarResumoManha(tarefasList, lembretesList, finList, matList, isOperador)
+        respostaTexto = resumo.textoFormatado
+        ttsTexto = resumo.ttsTexto
+        tipoBadge = 'TECNICA'
+        sugestoes = ['Quais as tarefas?', 'Quem está me devendo?', 'Quem eu estou devendo?']
+      } else if (parsed.intent === 'quem_estou_devendo') {
+        const finList = await localDB.getAll('financeiro')
+        const relatorio = calcularQuemEstouDevendo(finList, isOperador)
+        respostaTexto = relatorio.textoFormatado
+        tipoBadge = 'EXATO'
+        sugestoes = isOperador
+          ? []
+          : ['Quem está me devendo?', 'Quais as tarefas?', 'Consultar saldo']
       } else if (parsed.intent === 'quem_me_deve') {
         const finList = await localDB.getAll('financeiro')
         const cliList = await localDB.getAll('clientes')
@@ -1462,7 +2243,9 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const relatorio = calcularQuemMeDeve(finList, cliList, obrasList, isOperador)
         respostaTexto = relatorio.textoFormatado
         tipoBadge = 'EXATO'
-        sugestoes = isOperador ? [] : ['Recebi 450 do Rafael', 'Consultar saldo', 'Desfaz']
+        sugestoes = isOperador
+          ? []
+          : ['Quem eu estou devendo?', 'Recebi 450 do Rafael', 'Consultar saldo']
       } else if (parsed.intent === 'baixa_recebimento') {
         const finList = await localDB.getAll('financeiro')
         const cliList = await localDB.getAll('clientes')

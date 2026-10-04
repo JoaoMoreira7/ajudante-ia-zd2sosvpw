@@ -74,7 +74,52 @@ export function parseLocalIntent(text: string, context?: Record<string, any>): P
     }
   }
 
-  // 1.2 QUEM ME DEVE / CONTAS A RECEBER
+  // 1.2 RESUMO DA MANHÃ / BOM DIA
+  if (
+    /\b(resumo\s+(?:da\s+)?manh[ãa]|resumo\s+do\s+dia|bom\s+dia(?:\s+ajudante)?|o\s+que\s+tem\s+pra\s+hoje|planejamento\s+do\s+dia)\b/i.test(
+      clean,
+    )
+  ) {
+    return {
+      intent: 'resumo_manha',
+      confidence: 0.98,
+      params: {},
+      rawText: text,
+      categoriaAcao: 'sistema',
+    }
+  }
+
+  // 1.3 TAREFAS POR VOZ: CONSULTA ("quais as tarefas?", "minhas tarefas")
+  if (
+    /\b(quais\s+(?:as\s+)?tarefas|minhas\s+tarefas|ver\s+tarefas|lista\s+de\s+tarefas|fila\s+de\s+tarefas)\b/i.test(
+      clean,
+    )
+  ) {
+    return {
+      intent: 'consultar_tarefas',
+      confidence: 0.98,
+      params: {},
+      rawText: text,
+      categoriaAcao: 'obra',
+    }
+  }
+
+  // 1.4 QUEM EU ESTOU DEVENDO / CONTAS A PAGAR
+  if (
+    /\b(quem\s+(?:eu\s+)?estou\s+devendo|quem\s+(?:eu\s+)?to\s+devendo|quem\s+(?:eu\s+)?tô\s+devendo|o\s+que\s+estou\s+devendo|minhas\s+d[íi]vidas|contas\s+a\s+pagar|o\s+que\s+tenho\s+que\s+pagar)\b/i.test(
+      clean,
+    )
+  ) {
+    return {
+      intent: 'quem_estou_devendo',
+      confidence: 0.98,
+      params: {},
+      rawText: text,
+      categoriaAcao: 'financeiro',
+    }
+  }
+
+  // 1.5 QUEM ME DEVE / CONTAS A RECEBER
   if (
     /\b(quem est[áa] me devendo|quem me deve|quem ta me devendo|quem tá me devendo|valores a receber|contas a receber|o que tenho pra receber|quanto tenho pra receber)\b/i.test(
       clean,
@@ -89,7 +134,7 @@ export function parseLocalIntent(text: string, context?: Record<string, any>): P
     }
   }
 
-  // 1.3 RESUMO DA SEMANA
+  // 1.6 RESUMO DA SEMANA
   if (
     /\b(como foi minha semana|resumo da semana|resumo semanal|como foram as coisas essa semana|balan[çc]o da semana)\b/i.test(
       clean,

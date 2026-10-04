@@ -18,12 +18,14 @@ import {
   DocumentoObra,
   ConfiguracoesApp,
   SyncQueueItem,
+  TarefaObra,
+  LembreteObra,
 } from '@/types/database'
 
-export type { SyncQueueItem } from '@/types/database'
+export type { SyncQueueItem, TarefaObra, LembreteObra } from '@/types/database'
 
 const DB_NAME = 'ajudante_ia_local_v2'
-const DB_VERSION = 3
+const DB_VERSION = 4
 
 export interface DBStores {
   clientes: Cliente
@@ -35,6 +37,8 @@ export interface DBStores {
   documentos: DocumentoObra
   configuracoes: ConfiguracoesApp
   sync_queue: SyncQueueItem
+  tarefas_obra: TarefaObra
+  lembretes_obra: LembreteObra
 }
 
 export type StoreName = keyof DBStores
@@ -61,6 +65,8 @@ class LocalDatabase {
       'documentos',
       'configuracoes',
       'sync_queue',
+      'tarefas_obra',
+      'lembretes_obra',
     ]
     stores.forEach((st) => {
       this.memoryFallback.set(st, new Map())
@@ -88,6 +94,8 @@ class LocalDatabase {
             'documentos',
             'configuracoes',
             'sync_queue',
+            'tarefas_obra',
+            'lembretes_obra',
           ]
           storeNames.forEach((name) => {
             if (!db.objectStoreNames.contains(name)) {
@@ -236,6 +244,8 @@ class LocalDatabase {
       'documentos',
       'configuracoes',
       'sync_queue',
+      'tarefas_obra',
+      'lembretes_obra',
     ]
     for (const st of stores) {
       if (this.isIndexedDBAvailable) {
@@ -630,6 +640,42 @@ class LocalDatabase {
     await this.put('diario_obra', d1)
     await this.put('diario_obra', d2)
     await this.put('diario_obra', d3)
+
+    // Tarefas iniciais
+    const t1: TarefaObra = {
+      id: 'tar_1',
+      owner_id: userId,
+      obra_id: 'obra_1',
+      titulo: 'Pedir pro eletricista passar fiação da sala',
+      prazo: new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0],
+      prioridade: 'alta',
+      status: 'pendente',
+      created: new Date().toISOString(),
+    }
+    const t2: TarefaObra = {
+      id: 'tar_2',
+      owner_id: userId,
+      obra_id: 'obra_2',
+      titulo: 'Comprar rejunte e espaçador para o piso',
+      prazo: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+      prioridade: 'media',
+      status: 'pendente',
+      created: new Date().toISOString(),
+    }
+    await this.put('tarefas_obra', t1)
+    await this.put('tarefas_obra', t2)
+
+    // Lembretes iniciais
+    const l1: LembreteObra = {
+      id: 'lem_1',
+      owner_id: userId,
+      titulo: 'Medir o nível da fundação com a mangueira',
+      horario: '06:00',
+      frequencia: 'diaria',
+      ativo: true,
+      created: new Date().toISOString(),
+    }
+    await this.put('lembretes_obra', l1)
   }
 }
 

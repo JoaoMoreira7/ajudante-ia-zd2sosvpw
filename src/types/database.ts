@@ -142,8 +142,45 @@ export interface FinanceiroLancamento {
   parcela_atual?: number
   total_parcelas?: number
   grupo_parcelamento_id?: string
+  credor_nome?: string // Terceiro a quem se deve (ex: "Zé", "Depósito Alvorada")
   created?: string
   updated?: string
+}
+
+export interface TarefaObra {
+  id: string
+  owner_id: string
+  obra_id?: string
+  titulo: string
+  descricao?: string
+  prazo?: string // yyyy-mm-dd
+  prioridade: 'baixa' | 'media' | 'alta' | 'urgente'
+  status: 'pendente' | 'concluida' | 'cancelada'
+  origem_fala?: string
+  concluida_em?: string
+  created?: string
+  updated?: string
+}
+
+export interface LembreteObra {
+  id: string
+  owner_id: string
+  titulo: string
+  horario?: string // ex: "06:00"
+  frequencia: 'uma_vez' | 'diaria' | 'semanal' | 'mensal'
+  dia_semana?: number // 0-6
+  dia_mes?: number // 1-31
+  proximo_disparo?: string // ISO
+  ativo: boolean
+  ultimo_disparo?: string
+  created?: string
+  updated?: string
+}
+
+export interface TetoCategoriaConfig {
+  categoria: string
+  limiteMensal: number
+  mesAnoReferencia?: string // "yyyy-mm"
 }
 
 export interface MaterialEstoque {
@@ -213,6 +250,9 @@ export interface ConfiguracoesApp {
   apelido_usuario?: string
   tom_conversa?: 'padrao' | 'curto' | 'sem_emoji'
   notas_contexto?: Array<{ id: string; texto: string; data: string }>
+  teto_categorias?: Record<string, number> // { material: 800, cimento: 1200, ... }
+  resumo_manha_hora?: number // padrão: 6
+  ultimo_resumo_manha_data?: string // yyyy-mm-dd do último disparo exibido
   created?: string
   updated?: string
 }
@@ -229,6 +269,8 @@ export interface SyncQueueItem {
     | 'diario_obra'
     | 'documentos'
     | 'configuracoes'
+    | 'tarefas_obra'
+    | 'lembretes_obra'
   entidade_id: string
   operacao: 'create' | 'update' | 'delete'
   payload: Record<string, unknown>

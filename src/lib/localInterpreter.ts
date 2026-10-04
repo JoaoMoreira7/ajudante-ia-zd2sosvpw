@@ -69,6 +69,54 @@ export function interpretCommandLocally(text: string): LocalParsedIntent {
     }
   }
 
+  // 1.3 "Resumo da manhã" / "Resumo do dia" / "Bom dia"
+  if (
+    norm.includes('resumo da manha') ||
+    norm.includes('resumo da manhã') ||
+    norm.includes('resumo do dia') ||
+    norm.startsWith('bom dia') ||
+    norm.includes('o que tem pra hoje')
+  ) {
+    return {
+      intent: 'resumo_manha',
+      confidence: 0.98,
+      params: {},
+      descricaoHumana: 'Apresentar resumo do dia com tarefas, lembretes e obras.',
+    }
+  }
+
+  // 1.4 "Quem eu estou devendo?"
+  if (
+    norm.includes('quem eu estou devendo') ||
+    norm.includes('quem eu to devendo') ||
+    norm.includes('quem estou devendo') ||
+    norm.includes('minhas dividas') ||
+    norm.includes('minhas dívidas') ||
+    norm.includes('contas a pagar')
+  ) {
+    return {
+      intent: 'quem_estou_devendo',
+      confidence: 0.98,
+      params: {},
+      descricaoHumana: 'Consultar dívidas e contas a pagar pendentes.',
+    }
+  }
+
+  // 1.5 "Quais as tarefas?" / "Minhas tarefas"
+  if (
+    norm.includes('quais as tarefas') ||
+    norm.includes('minhas tarefas') ||
+    norm.includes('ver tarefas') ||
+    norm.includes('lista de tarefas')
+  ) {
+    return {
+      intent: 'consultar_tarefas',
+      confidence: 0.98,
+      params: {},
+      descricaoHumana: 'Listar tarefas pendentes da obra por prazo de vencimento.',
+    }
+  }
+
   // 2. Parede com desconto de vão / porta: "Tira a porta de 80 por 210" / "desconta a porta"
   const matchPorta = norm.match(
     /(?:tira|desconta|menos)\s+(?:a\s+)?(?:porta|janela|vao|abertura)\s+(?:de\s+)?(\d+[.,]?\d*)\s*(?:por|x|\*)\s*(\d+[.,]?\d*)/,

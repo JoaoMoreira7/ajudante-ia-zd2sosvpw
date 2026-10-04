@@ -24,7 +24,9 @@ import { Button } from '@/components/ui/button'
 import { AlertTriangle, AlertCircle, Calendar, ChevronRight, CheckCircle2 } from 'lucide-react'
 import { WalkieTalkieButton } from '@/components/WalkieTalkieButton'
 import { ActionCardList } from '@/components/ActionCardList'
+import { TarefasELembretesModal } from '@/components/TarefasELembretesModal'
 import { useVoiceContext } from '@/contexts/VoiceContext'
+import { CheckSquare } from 'lucide-react'
 import { useVoiceHybrid } from '@/hooks/useVoiceHybrid'
 import {
   obterConsumoAudio,
@@ -55,6 +57,10 @@ export const Dashboard: React.FC = () => {
   const [financeiro, setFinanceiro] = useState<FinanceiroLancamento[]>([])
   const [documentos, setDocumentos] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [modalTarefasOpen, setModalTarefasOpen] = useState(false)
+  const [initialTabTarefas, setInitialTabTarefas] = useState<'tarefas' | 'lembretes' | 'tetos'>(
+    'tarefas',
+  )
   const [consumoAudio, setConsumoAudio] = useState(() => obterConsumoAudio(profile?.id))
 
   const limites = obterLimitesPlano(plano)
@@ -289,7 +295,18 @@ export const Dashboard: React.FC = () => {
         </Link>
 
         {/* Atalhos diretos de 1 clique no Modo Simples (regra de 2 cliques) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setInitialTabTarefas('tarefas')
+              setModalTarefasOpen(true)
+            }}
+            className="h-24 rounded-2xl bg-emerald-500/15 border-2 border-emerald-500/40 flex flex-col items-center justify-center gap-1.5 text-base font-bold text-foreground hover:bg-emerald-500/25 text-center p-2 cursor-pointer"
+          >
+            <CheckSquare className="w-7 h-7 text-emerald-600" />
+            <span>Tarefas</span>
+          </button>
           <Link
             to="/obras"
             className="h-24 rounded-2xl bg-muted/80 border-2 border-border flex flex-col items-center justify-center gap-1.5 text-base font-bold text-foreground hover:bg-muted text-center p-2"
@@ -326,6 +343,11 @@ export const Dashboard: React.FC = () => {
   // MODO PROFISSIONAL E MODO ECONÔMICO
   return (
     <div className="space-y-6">
+      <TarefasELembretesModal
+        open={modalTarefasOpen}
+        onOpenChange={setModalTarefasOpen}
+        initialTab={initialTabTarefas}
+      />
       {/* 5. BLOCO DE ALERTAS NO TOPO DO INÍCIO */}
       {alertas.length > 0 && (
         <div className="space-y-2">
@@ -636,6 +658,20 @@ export const Dashboard: React.FC = () => {
           </Link>
         </div>
         <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-8 gap-2.5 sm:gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setInitialTabTarefas('tarefas')
+              setModalTarefasOpen(true)
+            }}
+            className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-xl bg-emerald-500/10 border-2 border-emerald-500/30 hover:border-emerald-500 hover:bg-emerald-500/15 transition-all text-center group cursor-pointer"
+          >
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center mb-2 group-hover:scale-110 transition-transform shadow-xs">
+              <CheckSquare className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-black text-foreground">Tarefas</span>
+          </button>
+
           <Link
             to="/falar?busca=1"
             className="flex flex-col items-center justify-center p-3 sm:p-4 rounded-xl bg-primary/10 border-2 border-primary/30 hover:border-primary hover:bg-primary/15 transition-all text-center group"
