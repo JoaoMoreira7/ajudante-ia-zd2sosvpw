@@ -42,6 +42,12 @@ interface AuthContextType {
     name: string,
     perfil?: 'admin' | 'dono' | 'operador',
   ) => Promise<{ success: boolean; error?: string }>
+  requestPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>
+  confirmPasswordReset: (
+    token: string,
+    password: string,
+    passwordConfirm: string,
+  ) => Promise<{ success: boolean; error?: string }>
   assinatura: Assinatura | null
   planoAtivo: PlanoTipo
   plano: PlanoTipo
@@ -81,6 +87,8 @@ const AuthContext = createContext<AuthContextType>({
   toggleAltoContraste: async () => {},
   login: async () => ({ success: false }),
   signup: async () => ({ success: false }),
+  requestPasswordReset: async () => ({ success: false }),
+  confirmPasswordReset: async () => ({ success: false }),
   assinatura: null,
   planoAtivo: 'essencial',
   plano: 'essencial',
@@ -395,6 +403,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  const requestPasswordReset = async (
+    email: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      if (navigator.onLine) {
+        await pb.collection('users').requestPasswordReset(email.trim().toLowerCase())
+        return { success: true }
+      }
+      return {
+        success: false,
+        error: 'Você precisa de conexão com a internet para solicitar a recuperação de senha.',
+      }
+    } catch (err: any) {
+      // Por segurança e padrão do PocketBase, erros de envio ou não encontrado
+      // podem ser reportados ou mascarados pela tela, mas retornamos o erro para a UI tratar.
+      return {
+        success: false,
+        error: err?.message || 'Não foi possível solicitar a recuperação de senha.',
+      }
+    }
+  }
+
+  const confirmPasswordReset = async (
+    token: string,
+    pass: string,
+    passConfirm: string,
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      if (navigator.onLine) {
+        await pb.collection('users').confirmPasswordReset(token, pass, passConfirm)
+        return { success: true }
+      }
+      return {
+        success: false,
+        error: 'Você precisa de conexão com a internet para redefinir sua senha.',
+      }
+    } catch (err: any) {
+      return {
+        success: false,
+        error:
+          err?.message ||
+          'O link de redefinição expirou ou é inválido. Peça um novo link na tela de login.',
+      }
+    }
+  }
+
   const logout = () => {
     pb.authStore.clear()
     setUser(null)
@@ -438,6 +492,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toggleAltoContraste,
         login,
         signup,
+        requestPasswordReset,
+        confirmPasswordReset,
         logout,
         refreshUserData,
       }}

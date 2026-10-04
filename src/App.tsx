@@ -25,6 +25,7 @@ import Planos from '@/pages/Planos'
 import Equipe from '@/pages/Equipe'
 import Login from '@/pages/Login'
 import Cadastro from '@/pages/Cadastro'
+import RedefinirSenha from '@/pages/RedefinirSenha'
 import Admin from '@/pages/Admin'
 import NotFound from '@/pages/NotFound'
 
@@ -117,7 +118,8 @@ export default function App() {
                     <Route path="admin" element={<Admin />} />
                     <Route path="login" element={<Login />} />
                     <Route path="cadastro" element={<Cadastro />} />
-                    <Route path="*" element={<NotFound />} />
+                    <Route path="redefinir-senha" element={<RedefinirSenha />} />
+                    <Route path="*" element={<NotFound />} />{' '}
                   </Route>
                 </Routes>
               </GlobalErrorBoundary>

@@ -52,6 +52,7 @@ export const ObraDetalhe: React.FC = () => {
   const [clienteObra, setClienteObra] = useState<any>(null)
   const [diarios, setDiarios] = useState<DiarioObra[]>([])
   const [fotos, setFotos] = useState<DocumentoObra[]>([])
+  const [orcamentos, setOrcamentos] = useState<Orcamento[]>([])
   const [carregando, setCarregando] = useState(true)
   const [dialogDiarioAberto, setDialogDiarioAberto] = useState(false)
   const [dialogFotoAberto, setDialogFotoAberto] = useState(false)
@@ -106,6 +107,14 @@ export const ObraDetalhe: React.FC = () => {
       setFotos(
         todosDocs
           .filter((d) => d?.obra_id === id && d?.tipo === 'foto')
+          .sort(
+            (a, b) => new Date(b?.created || 0).getTime() - new Date(a?.created || 0).getTime(),
+          ),
+      )
+      const todosOrc = await localDB.getAll('orcamentos')
+      setOrcamentos(
+        todosOrc
+          .filter((o) => o?.obra_id === id)
           .sort(
             (a, b) => new Date(b?.created || 0).getTime() - new Date(a?.created || 0).getTime(),
           ),

@@ -13,6 +13,7 @@ import {
   EyeOff,
   Sparkles,
 } from 'lucide-react'
+import { PasswordRequirementsIndicator } from '@/components/PasswordRequirementsIndicator'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -46,11 +47,6 @@ export const Cadastro: React.FC = () => {
       window.removeEventListener('offline', handleOffline)
     }
   }, [])
-
-  // Validações visuais da senha
-  const temOitoCaracteres = password.length >= 8
-  const temNumero = /\d/.test(password)
-  const senhasConferem = password.length > 0 && password === passwordConfirm
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -212,33 +208,7 @@ export const Cadastro: React.FC = () => {
             </div>
 
             {/* Requisitos visuais da senha */}
-            <div className="p-3 rounded-xl bg-muted/40 border border-border text-xs space-y-1.5">
-              <span className="font-bold text-muted-foreground block text-[11px] uppercase">
-                Requisitos da Senha:
-              </span>
-              <div className="flex flex-wrap gap-3">
-                <span
-                  className={`flex items-center gap-1.5 ${temOitoCaracteres ? 'text-emerald-600 font-bold' : 'text-muted-foreground'}`}
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Mínimo de 8 caracteres
-                </span>
-                <span
-                  className={`flex items-center gap-1.5 ${temNumero ? 'text-emerald-600 font-bold' : 'text-muted-foreground'}`}
-                >
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Contém números
-                </span>
-                {passwordConfirm.length > 0 && (
-                  <span
-                    className={`flex items-center gap-1.5 ${senhasConferem ? 'text-emerald-600 font-bold' : 'text-destructive font-bold'}`}
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    {senhasConferem ? 'Senhas conferem' : 'As senhas não conferem'}
-                  </span>
-                )}
-              </div>
-            </div>
+            <PasswordRequirementsIndicator password={password} passwordConfirm={passwordConfirm} />
 
             {/* Seleção de Perfil com Cards Grandes */}
             <div className="space-y-2 pt-1">
