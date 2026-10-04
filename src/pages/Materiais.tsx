@@ -12,6 +12,7 @@ import {
   Share2,
   Printer,
 } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +28,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 export const Materiais: React.FC = () => {
+  const { profile, config } = useAuth()
   const [materiais, setMateriais] = useState<MaterialEstoque[]>([])
   const [dialogAberto, setDialogAberto] = useState(false)
   const [modalListaComprasAberto, setModalListaComprasAberto] = useState(false)
@@ -52,15 +54,20 @@ export const Materiais: React.FC = () => {
     e.preventDefault()
     if (!nome.trim()) return
 
+    const autorNome = profile?.name || config?.nome_profissional || 'Responsável'
+    const autorId = profile?.id || 'local_user'
+
     const novo: MaterialEstoque = {
       id: 'mat_' + Date.now(),
-      owner_id: 'local_user',
+      owner_id: autorId,
       nome: nome.trim(),
       quantidade: parseFloat(quantidade) || 0,
       unidade,
       estoque_minimo: parseFloat(estoqueMinimo) || 5,
       preco: parseFloat(preco) || undefined,
       fornecedor: fornecedor.trim() || undefined,
+      criado_por_nome: autorNome,
+      criado_por_id: autorId,
       created: new Date().toISOString(),
     }
 
@@ -321,6 +328,11 @@ export const Materiais: React.FC = () => {
                   {item.fornecedor && (
                     <span className="text-[11px] text-muted-foreground block">
                       {item.fornecedor}
+                    </span>
+                  )}
+                  {item.criado_por_nome && (
+                    <span className="text-[10px] text-muted-foreground block mt-0.5">
+                      👤 Registrado por: {item.criado_por_nome}
                     </span>
                   )}
                 </div>

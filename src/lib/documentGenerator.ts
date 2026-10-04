@@ -132,6 +132,8 @@ export async function gerarEImprimirRecibo(dados: DadosRecibo, obraId?: string):
 
   // Registro na coleção documentos com tipo 'recibo'
   try {
+    const autorNome = dados.profissionalNome || (pb.authStore.model as any)?.name || 'Responsável'
+    const autorId = pb.authStore.model?.id || 'local_user'
     await mutateEntity('documentos', 'create', {
       id: 'doc_recibo_' + Date.now(),
       owner_id: pb.authStore.model?.id || 'local_user',
@@ -139,6 +141,8 @@ export async function gerarEImprimirRecibo(dados: DadosRecibo, obraId?: string):
       titulo: `Recibo - ${dados.clienteNome} (${valorFormatado})`,
       tipo: 'recibo',
       conteudo_texto: `Recibo emitido para ${dados.clienteNome} no valor de ${valorFormatado} referente a: ${dados.referenteA}. Data: ${dataHoje}.`,
+      criado_por_nome: autorNome,
+      criado_por_id: autorId,
     })
   } catch (err) {
     console.warn('Erro ao salvar documento de recibo:', err)
@@ -297,6 +301,8 @@ export async function gerarEImprimirOrdemServico(
 
   // Registro na coleção documentos com tipo 'ordem_servico'
   try {
+    const autorNome = dados.profissionalNome || (pb.authStore.model as any)?.name || 'Responsável'
+    const autorId = pb.authStore.model?.id || 'local_user'
     await mutateEntity('documentos', 'create', {
       id: 'doc_os_' + Date.now(),
       owner_id: pb.authStore.model?.id || 'local_user',
@@ -304,6 +310,8 @@ export async function gerarEImprimirOrdemServico(
       titulo: `Ordem de Serviço - ${dados.obraTitulo}`,
       tipo: 'ordem_servico',
       conteudo_texto: `Ordem de Serviço emitida para ${dados.clienteNome} na obra ${dados.obraTitulo}. Total: ${valorTotalFormatado}. Emissão: ${dataEmissao}.`,
+      criado_por_nome: autorNome,
+      criado_por_id: autorId,
     })
   } catch (err) {
     console.warn('Erro ao salvar documento de ordem de serviço:', err)

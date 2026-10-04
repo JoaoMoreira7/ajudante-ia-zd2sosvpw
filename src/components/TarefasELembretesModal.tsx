@@ -105,13 +105,18 @@ export function TarefasELembretesModal({
     e.preventDefault()
     if (!novoTituloTarefa.trim()) return
 
+    const autorNome = profile?.name || config?.nome_profissional || 'Responsável'
+    const autorId = profile?.id || 'local_user'
+
     const nova: TarefaObra = {
       id: 'tar_' + Date.now(),
-      owner_id: profile?.id || 'local_user',
+      owner_id: autorId,
       titulo: novoTituloTarefa.trim(),
       prazo: novoPrazoTarefa || undefined,
       prioridade: novaPrioridade,
       status: 'pendente',
+      criado_por_nome: autorNome,
+      criado_por_id: autorId,
       created: new Date().toISOString(),
     }
     await localDB.put('tarefas_obra', nova)
@@ -321,6 +326,11 @@ export function TarefasELembretesModal({
                             >
                               {t.prioridade}
                             </Badge>
+                            {t.criado_por_nome && (
+                              <span className="text-[11px] text-muted-foreground font-medium">
+                                👤 Registrado por: {t.criado_por_nome}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>

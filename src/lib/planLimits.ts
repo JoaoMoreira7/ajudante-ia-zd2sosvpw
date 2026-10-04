@@ -18,6 +18,8 @@ export interface VerificacaoLimiteResultado {
   permitido: boolean
   motivo?: string
   planoRequerido?: PlanoTipo
+  planoAtual?: PlanoTipo
+  planoMinimoRecomendado?: PlanoTipo
   limiteAtual?: number
   totalAtual?: number
   mensagemBloqueio?: string

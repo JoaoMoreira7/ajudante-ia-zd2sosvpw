@@ -26,6 +26,7 @@ export interface UserProfile {
   email: string
   name: string
   perfil?: UserRole
+  dono_id?: string
   status_conta?: StatusConta
   motivo_bloqueio?: string
   bloqueado_em?: string

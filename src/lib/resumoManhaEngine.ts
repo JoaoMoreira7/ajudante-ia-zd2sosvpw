@@ -37,6 +37,7 @@ export function gerarResumoManha(
   materiais: MaterialEstoque[],
   isOperador = false,
   dataHoje: Date = new Date(),
+  equipeNomesMap?: Record<string, string>,
 ): ResumoManhaData {
   const dataHojeStr = dataHoje.toISOString().split('T')[0]
   const ontem = new Date(dataHoje.getTime() - 86400000)
@@ -98,21 +99,22 @@ export function gerarResumoManha(
   if (tarefasHojeEVencidas.length > 0) {
     const vencidas = tarefasHojeEVencidas.filter((t) => t.prazo && t.prazo < dataHojeStr)
     const deHoje = tarefasHojeEVencidas.filter((t) => t.prazo === dataHojeStr)
+    const formatarItemTarefa = (t: TarefaObra) => {
+      const autor = t.criado_por_nome || (t.criado_por_id && equipeNomesMap?.[t.criado_por_id])
+      return autor ? `"${t.titulo}" (por ${autor})` : `"${t.titulo}"`
+    }
     const listaTarefas: string[] = []
     if (vencidas.length > 0) {
       listaTarefas.push(
         `${vencidas.length} pendência${vencidas.length > 1 ? 's' : ''} anterior${vencidas.length > 1 ? 'es' : ''} (${vencidas
-          .map((t) => t.titulo)
           .slice(0, 2)
+          .map(formatarItemTarefa)
           .join(', ')})`,
       )
     }
     if (deHoje.length > 0) {
       listaTarefas.push(
-        `${deHoje.length} para hoje (${deHoje
-          .map((t) => t.titulo)
-          .slice(0, 2)
-          .join(', ')})`,
+        `${deHoje.length} para hoje (${deHoje.slice(0, 2).map(formatarItemTarefa).join(', ')})`,
       )
     }
     partes.push(`📋 Tarefas: ${listaTarefas.join(' e ')}.`)
@@ -134,15 +136,27 @@ export function gerarResumoManha(
       )
     }
     if (totalGastosOntem > 0) {
-      partes.push(`💸 Gastos de ontem: R$ ${totalGastosOntem.toFixed(2)}.`)
+      const autoresOntem = Array.from(
+        new Set(
+          gastosOntem
+            .map((g) => g.criado_por_nome || (g.criado_por_id && equipeNomesMap?.[g.criado_por_id]))
+            .filter(Boolean),
+        ),
+      )
+      const autoresTxt =
+        autoresOntem.length > 0 ? ` (registrados por ${autoresOntem.join(', ')})` : ''
+      partes.push(`💸 Gastos de ontem: R$ ${totalGastosOntem.toFixed(2)}${autoresTxt}.`)
     }
   }
 
   // Materiais
   if (materiaisAlerta.length > 0) {
     const matsNomes = materiaisAlerta
-      .map((m) => m.nome)
       .slice(0, 3)
+      .map((m) => {
+        const autor = m.criado_por_nome || (m.criado_por_id && equipeNomesMap?.[m.criado_por_id])
+        return autor ? `${m.nome} (cadastrado por ${autor})` : m.nome
+      })
       .join(', ')
     partes.push(`📦 Estoque em alerta: ${matsNomes}.`)
   }

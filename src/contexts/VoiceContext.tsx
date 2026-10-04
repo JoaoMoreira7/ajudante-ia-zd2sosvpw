@@ -160,12 +160,60 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const ultimoData = config?.ultimo_resumo_manha_data
         if (!deveExibirResumoManhaHoje(ultimoData, horaCfg)) return
 
-        const tarefas = await localDB.getAll('tarefas_obra')
+        let tarefas = await localDB.getAll('tarefas_obra')
         const lembretes = await localDB.getAll('lembretes_obra')
-        const financeiro = await localDB.getAll('financeiro')
-        const materiais = await localDB.getAll('materiais_estoque')
+        let financeiro = await localDB.getAll('financeiro')
+        let materiais = await localDB.getAll('materiais_estoque')
 
-        const resumo = gerarResumoManha(tarefas, lembretes, financeiro, materiais, isOperador)
+        // Se for Dono, consolida equipe (dono + membros)
+        const equipeNomesMap: Record<string, string> = {}
+        if (!isOperador) {
+          const membros = await localDB.getAll('equipe_membros')
+          const idsEquipe = new Set<string>()
+          if (profile?.id) idsEquipe.add(profile.id)
+          for (const m of membros) {
+            if (m.owner_id === profile?.id || !profile?.id) {
+              if (m.operador_user_id) {
+                idsEquipe.add(m.operador_user_id)
+                equipeNomesMap[m.operador_user_id] = m.nome
+              }
+              if (m.id) {
+                idsEquipe.add(m.id)
+                equipeNomesMap[m.id] = m.nome
+              }
+            }
+          }
+          if (idsEquipe.size > 1) {
+            tarefas = tarefas.filter(
+              (t) =>
+                !t.criado_por_id ||
+                idsEquipe.has(t.criado_por_id) ||
+                (t.owner_id && idsEquipe.has(t.owner_id)),
+            )
+            financeiro = financeiro.filter(
+              (f) =>
+                !f.criado_por_id ||
+                idsEquipe.has(f.criado_por_id) ||
+                (f.owner_id && idsEquipe.has(f.owner_id)),
+            )
+            materiais = materiais.filter(
+              (m) =>
+                !m.criado_por_id ||
+                idsEquipe.has(m.criado_por_id) ||
+                (m.owner_id && idsEquipe.has(m.owner_id)),
+            )
+          }
+        }
+
+        const resumo = gerarResumoManha(
+          tarefas,
+          lembretes,
+          financeiro,
+          materiais,
+          isOperador,
+          new Date(),
+          equipeNomesMap,
+        )
 
         // Atualiza a data do último resumo para não repetir no mesmo dia
         await localDB.put('configuracoes', {
@@ -304,6 +352,10 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const processUserInput = async (rawInput: string, audioDurationSeconds: number = 0) => {
     const textOriginal = rawInput.trim()
     if (!textOriginal) return
+
+    // Identifica autor logado com fallback
+    const autorNome = profile?.name || config?.nome_profissional || 'Responsável'
+    const autorId = profile?.id || pb.authStore.model?.id || 'local_user'
 
     // MELHORIA 1: Normalização fonética e jargão de obra antes do parse e envio
     const normalizacao = normalizarJargaoObra(textOriginal)
@@ -482,7 +534,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         for (const parc of plano.parcelas) {
           await mutateEntity('financeiro', 'create', {
             id: 'fin_' + Date.now() + '_' + parc.numero,
-            owner_id: pb.authStore.model?.id || 'local_user',
+            owner_id: autorId,
             tipo: 'saida',
             categoria: 'outros',
             descricao: parc.descricao,
@@ -492,6 +544,8 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             parcela_atual: parc.numero,
             total_parcelas: plano.totalParcelas,
             grupo_parcelamento_id: grupoId,
+            criado_por_nome: autorNome,
+            criado_por_id: autorId,
           })
         }
 
@@ -506,6 +560,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           categoria: 'outros',
           data: new Date().toISOString().split('T')[0],
           status: 'Gravado com sucesso',
+          criadoPorNome: autorNome,
           timestamp: Date.now(),
         }
         setUltimoRecibo(novoRecibo)
@@ -532,7 +587,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const novoId = 'fin_' + Date.now()
         await mutateEntity('financeiro', 'create', {
           id: novoId,
-          owner_id: pb.authStore.model?.id || 'local_user',
+          owner_id: autorId,
           tipo: 'saida',
           categoria: 'outros',
           descricao: p.descricao,
@@ -541,6 +596,8 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           status: 'pago',
           recorrente: true,
           dia_vencimento: p.diaVencimento,
+          criado_por_nome: autorNome,
+          criado_por_id: autorId,
         })
 
         const novoRecibo: ReciboItem = {
@@ -554,6 +611,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           categoria: 'outros',
           data: new Date().toISOString().split('T')[0],
           status: 'Ativo mensalmente',
+          criadoPorNome: autorNome,
           timestamp: Date.now(),
         }
         setUltimoRecibo(novoRecibo)
@@ -728,6 +786,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             valor: alvo.valor,
             data: new Date().toISOString().split('T')[0],
             status: 'Pago e quitado',
+            criadoPorNome: autorNome,
             timestamp: Date.now(),
           }
           setUltimoRecibo(rec)
@@ -754,7 +813,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const novoId = 'fin_' + Date.now()
           await mutateEntity('financeiro', 'create', {
             id: novoId,
-            owner_id: pb.authStore.model?.id || 'local_user',
+            owner_id: autorId,
             tipo: 'saida',
             categoria: 'outros',
             descricao: `Pagamento de empréstimo: ${cred}`,
@@ -762,6 +821,8 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             data: new Date().toISOString().split('T')[0],
             status: 'pago',
             credor_nome: cred,
+            criado_por_nome: autorNome,
+            criado_por_id: autorId,
           })
 
           const rec: ReciboItem = {
@@ -774,6 +835,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             valor: v,
             data: new Date().toISOString().split('T')[0],
             status: 'Quitado',
+            criadoPorNome: autorNome,
             timestamp: Date.now(),
           }
           setUltimoRecibo(rec)
@@ -818,7 +880,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const executeCadastroDivida = async () => {
           await mutateEntity('financeiro', 'create', {
             id: novoId,
-            owner_id: pb.authStore.model?.id || 'local_user',
+            owner_id: autorId,
             tipo: 'saida',
             categoria: 'outros',
             descricao: desc,
@@ -826,6 +888,8 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             data: new Date().toISOString().split('T')[0],
             status: 'pendente',
             credor_nome: cred,
+            criado_por_nome: autorNome,
+            criado_por_id: autorId,
           })
 
           const rec: ReciboItem = {
@@ -839,6 +903,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             categoria: 'outros',
             data: new Date().toISOString().split('T')[0],
             status: 'Pendente de pagamento',
+            criadoPorNome: autorNome,
             timestamp: Date.now(),
           }
           setUltimoRecibo(rec)
@@ -942,7 +1007,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const novoLembreteId = 'lem_' + Date.now()
         await localDB.put('lembretes_obra', {
           id: novoLembreteId,
-          owner_id: pb.authStore.model?.id || 'local_user',
+          owner_id: autorId,
           titulo: lembreteParsed.titulo,
           horario: lembreteParsed.horario,
           frequencia: lembreteParsed.frequencia,
@@ -996,6 +1061,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             descricao: alvo.titulo,
             data: new Date().toISOString().split('T')[0],
             status: 'Concluída com sucesso',
+            criadoPorNome: autorNome,
             timestamp: Date.now(),
           }
           setUltimoRecibo(rec)
@@ -1025,13 +1091,15 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         await localDB.put('tarefas_obra', {
           id: novaTarefaId,
-          owner_id: pb.authStore.model?.id || 'local_user',
+          owner_id: autorId,
           obra_id: obraAlvo?.id,
           titulo: tarefaParsed.titulo,
           prazo: tarefaParsed.prazo,
           prioridade: tarefaParsed.prioridade,
           status: 'pendente',
           origem_fala: text,
+          criado_por_nome: autorNome,
+          criado_por_id: autorId,
         })
 
         const rec: ReciboItem = {
@@ -1043,6 +1111,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           descricao: tarefaParsed.titulo,
           data: tarefaParsed.prazo || new Date().toISOString().split('T')[0],
           status: `Prioridade: ${tarefaParsed.prioridade}`,
+          criadoPorNome: autorNome,
           timestamp: Date.now(),
         }
         setUltimoRecibo(rec)
@@ -1278,11 +1347,13 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             } else {
               await mutateEntity('materiais_estoque', 'create', {
                 id: 'mat_' + Date.now() + '_' + i,
-                owner_id: pb.authStore.model?.id || 'local_user',
+                owner_id: autorId,
                 nome: mat,
                 quantidade: qtd,
                 unidade: un as any,
                 estoque_minimo: 5,
+                criado_por_nome: autorNome,
+                criado_por_id: autorId,
               })
             }
 
@@ -1302,14 +1373,16 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const obs = params.observacao || params.textoCompleto || text
             const obras = await localDB.getAll('obras')
             const obraAlvo = obras[0]
-            await localDB.put('diario_obra', {
+            await mutateEntity('diario_obra', 'create', {
               id: 'dia_' + Date.now() + '_' + i,
-              owner_id: 'local_user',
+              owner_id: autorId,
               obra_id: obraAlvo ? obraAlvo.id : 'obra_padrao',
               data: new Date().toISOString(),
               servico: serv,
               quantidade: params.quantidade || 0,
               observacoes: obs,
+              criado_por_nome: autorNome,
+              criado_por_id: autorId,
             })
 
             cardsGerados.push({
@@ -1333,13 +1406,15 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const tipoFin = intentName.includes('entrada') ? 'entrada' : 'saida'
             await mutateEntity('financeiro', 'create', {
               id: 'fin_' + Date.now() + '_' + i,
-              owner_id: pb.authStore.model?.id || 'local_user',
+              owner_id: autorId,
               tipo: tipoFin,
               categoria: params.categoria || 'outros',
               descricao: desc,
               valor: val,
               data: new Date().toISOString().split('T')[0],
               status: 'pago',
+              criado_por_nome: autorNome,
+              criado_por_id: autorId,
             })
 
             cardsGerados.push({
@@ -2137,13 +2212,15 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const executeSaida = async () => {
           idCriado = await mutateEntity('financeiro', 'create', {
             id: 'fin_' + Date.now(),
-            owner_id: pb.authStore.model?.id || 'local_user',
+            owner_id: autorId,
             tipo: 'saida',
             categoria: cat,
             descricao: desc,
             valor: val,
             data: new Date().toISOString().split('T')[0],
             status: 'pago',
+            criado_por_nome: autorNome,
+            criado_por_id: autorId,
           })
           pushUndo({
             id: 'undo_' + Date.now(),
@@ -2165,6 +2242,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             categoria: cat,
             data: new Date().toISOString().split('T')[0],
             status: 'Gravado com sucesso',
+            criadoPorNome: autorNome,
             timestamp: Date.now(),
           }
           setUltimoRecibo(rec)
@@ -2222,11 +2300,59 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         tipoBadge = 'EXATO'
         sugestoes = ['Resumo da manhã', 'Quem está me devendo?', 'Novo lembrete']
       } else if (parsed.intent === 'resumo_manha') {
-        const tarefasList = await localDB.getAll('tarefas_obra')
+        let tarefasList = await localDB.getAll('tarefas_obra')
         const lembretesList = await localDB.getAll('lembretes_obra')
-        const finList = await localDB.getAll('financeiro')
-        const matList = await localDB.getAll('materiais_estoque')
-        const resumo = gerarResumoManha(tarefasList, lembretesList, finList, matList, isOperador)
+        let finList = await localDB.getAll('financeiro')
+        let matList = await localDB.getAll('materiais_estoque')
+
+        const equipeNomesMap: Record<string, string> = {}
+        if (!isOperador) {
+          const membros = await localDB.getAll('equipe_membros')
+          const idsEquipe = new Set<string>()
+          if (profile?.id) idsEquipe.add(profile.id)
+          for (const m of membros) {
+            if (m.owner_id === profile?.id || !profile?.id) {
+              if (m.operador_user_id) {
+                idsEquipe.add(m.operador_user_id)
+                equipeNomesMap[m.operador_user_id] = m.nome
+              }
+              if (m.id) {
+                idsEquipe.add(m.id)
+                equipeNomesMap[m.id] = m.nome
+              }
+            }
+          }
+          if (idsEquipe.size > 1) {
+            tarefasList = tarefasList.filter(
+              (t) =>
+                !t.criado_por_id ||
+                idsEquipe.has(t.criado_por_id) ||
+                (t.owner_id && idsEquipe.has(t.owner_id)),
+            )
+            finList = finList.filter(
+              (f) =>
+                !f.criado_por_id ||
+                idsEquipe.has(f.criado_por_id) ||
+                (f.owner_id && idsEquipe.has(f.owner_id)),
+            )
+            matList = matList.filter(
+              (m) =>
+                !m.criado_por_id ||
+                idsEquipe.has(m.criado_por_id) ||
+                (m.owner_id && idsEquipe.has(m.owner_id)),
+            )
+          }
+        }
+
+        const resumo = gerarResumoManha(
+          tarefasList,
+          lembretesList,
+          finList,
+          matList,
+          isOperador,
+          new Date(),
+          equipeNomesMap,
+        )
         respostaTexto = resumo.textoFormatado
         ttsTexto = resumo.ttsTexto
         tipoBadge = 'TECNICA'
@@ -2273,6 +2399,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             valor: alvo.valor,
             data: new Date().toISOString().split('T')[0],
             status: 'Pago e baixado',
+            criadoPorNome: autorNome,
             timestamp: Date.now(),
           }
           setUltimoRecibo(novoRecibo)
@@ -2282,13 +2409,15 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const cli = parsed.params.clienteNome || 'Cliente'
           const novoId = await mutateEntity('financeiro', 'create', {
             id: 'fin_' + Date.now(),
-            owner_id: pb.authStore.model?.id || 'local_user',
+            owner_id: autorId,
             tipo: 'entrada',
             categoria: 'pagamento',
             descricao: `Recebido de ${cli}`,
             valor: v,
             data: new Date().toISOString().split('T')[0],
             status: 'pago',
+            criado_por_nome: autorNome,
+            criado_por_id: autorId,
           })
           respostaTexto = `Recebimento de R$ ${v.toFixed(2)} (${cli}) registrado e marcado como pago!`
           tipoBadge = 'EXATO'
@@ -2304,16 +2433,58 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             valor: v,
             data: new Date().toISOString().split('T')[0],
             status: 'Pago',
+            criadoPorNome: autorNome,
             timestamp: Date.now(),
           }
           setUltimoRecibo(novoRecibo)
         }
       } else if (parsed.intent === 'resumo_semanal') {
         const obrasList = await localDB.getAll('obras')
-        const finList = await localDB.getAll('financeiro')
+        let finList = await localDB.getAll('financeiro')
         const orcList = await localDB.getAll('orcamentos')
-        const matList = await localDB.getAll('materiais_estoque')
-        const resumo = gerarResumoSemana(obrasList, finList, orcList, matList, isOperador)
+        let matList = await localDB.getAll('materiais_estoque')
+
+        const equipeNomesMap: Record<string, string> = {}
+        if (!isOperador) {
+          const membros = await localDB.getAll('equipe_membros')
+          const idsEquipe = new Set<string>()
+          if (profile?.id) idsEquipe.add(profile.id)
+          for (const m of membros) {
+            if (m.owner_id === profile?.id || !profile?.id) {
+              if (m.operador_user_id) {
+                idsEquipe.add(m.operador_user_id)
+                equipeNomesMap[m.operador_user_id] = m.nome
+              }
+              if (m.id) {
+                idsEquipe.add(m.id)
+                equipeNomesMap[m.id] = m.nome
+              }
+            }
+          }
+          if (idsEquipe.size > 1) {
+            finList = finList.filter(
+              (f) =>
+                !f.criado_por_id ||
+                idsEquipe.has(f.criado_por_id) ||
+                (f.owner_id && idsEquipe.has(f.owner_id)),
+            )
+            matList = matList.filter(
+              (m) =>
+                !m.criado_por_id ||
+                idsEquipe.has(m.criado_por_id) ||
+                (m.owner_id && idsEquipe.has(m.owner_id)),
+            )
+          }
+        }
+
+        const resumo = gerarResumoSemana(
+          obrasList,
+          finList,
+          orcList,
+          matList,
+          isOperador,
+          equipeNomesMap,
+        )
         respostaTexto = resumo.textoFormatado
         ttsTexto = resumo.ttsTexto
         tipoBadge = 'TECNICA'
@@ -2326,13 +2497,15 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const executeEntrada = async () => {
           idCriado = await mutateEntity('financeiro', 'create', {
             id: 'fin_' + Date.now(),
-            owner_id: pb.authStore.model?.id || 'local_user',
+            owner_id: autorId,
             tipo: 'entrada' as const,
             categoria: 'pagamento',
             descricao: desc,
             valor: val,
             data: new Date().toISOString().split('T')[0],
             status: 'pago' as const,
+            criado_por_nome: autorNome,
+            criado_por_id: autorId,
           })
           pushUndo({
             id: 'undo_' + Date.now(),
@@ -2354,6 +2527,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             categoria: 'pagamento',
             data: new Date().toISOString().split('T')[0],
             status: 'Gravado com sucesso',
+            criadoPorNome: autorNome,
             timestamp: Date.now(),
           }
           setUltimoRecibo(rec)
@@ -2411,11 +2585,13 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           novoId = 'mat_' + Date.now()
           await mutateEntity('materiais_estoque', 'create', {
             id: novoId,
-            owner_id: pb.authStore.model?.id || 'local_user',
+            owner_id: autorId,
             nome: mat,
             quantidade: qtd,
             unidade: un as any,
             estoque_minimo: 5,
+            criado_por_nome: autorNome,
+            criado_por_id: autorId,
           })
           pushUndo({
             id: 'undo_' + Date.now(),
@@ -2438,6 +2614,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           unidade: un,
           data: new Date().toISOString().split('T')[0],
           status: 'Gravado com sucesso',
+          criadoPorNome: autorNome,
           timestamp: Date.now(),
         }
         setUltimoRecibo(rec)
@@ -2555,25 +2732,29 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const descQtd = qtd > 0 ? ` (${qtd} m²)` : ''
         const novoDiaId = 'dia_' + Date.now()
         if (obraAlvo) {
-          await localDB.put('diario_obra', {
+          await mutateEntity('diario_obra', 'create', {
             id: novoDiaId,
-            owner_id: 'local_user',
+            owner_id: obraAlvo.owner_id || autorId,
             obra_id: obraAlvo.id,
             data: new Date().toISOString(),
             servico: serv,
             quantidade: qtd,
             observacoes: parsed.params.textoCompleto || text,
+            criado_por_nome: autorNome,
+            criado_por_id: autorId,
           })
           respostaTexto = `Atividade registrada no diário da obra "${obraAlvo.titulo}": ${serv}${descQtd}.`
         } else {
-          await localDB.put('diario_obra', {
+          await mutateEntity('diario_obra', 'create', {
             id: novoDiaId,
-            owner_id: 'local_user',
+            owner_id: autorId,
             obra_id: 'obra_padrao',
             data: new Date().toISOString(),
             servico: serv,
             quantidade: qtd,
             observacoes: parsed.params.textoCompleto || text,
+            criado_por_nome: autorNome,
+            criado_por_id: autorId,
           })
           respostaTexto = `Atividade anotada no diário: ${serv}${descQtd}.`
         }
@@ -2590,6 +2771,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           obraNome: obraAlvo?.titulo,
           data: new Date().toISOString().split('T')[0],
           status: 'Gravado com sucesso',
+          criadoPorNome: autorNome,
           timestamp: Date.now(),
         }
         setUltimoRecibo(rec)
@@ -2762,6 +2944,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         obraNome: obraAlvo?.titulo,
         data: dataHojeStr,
         status: 'Gravado com sucesso',
+        criadoPorNome: autorNome,
         timestamp: Date.now(),
       }
       setUltimoRecibo(rec)

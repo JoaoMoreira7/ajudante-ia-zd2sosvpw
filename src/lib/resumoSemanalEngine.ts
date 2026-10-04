@@ -36,6 +36,7 @@ export function gerarResumoSemana(
   orcamentos: Orcamento[],
   materiais: MaterialEstoque[],
   isOperador = false,
+  equipeNomesMap?: Record<string, string>,
 ): ResumoSemanalData {
   const agora = new Date()
   const seteDiasAtras = new Date(agora.getTime() - 7 * 24 * 60 * 60 * 1000)
@@ -133,7 +134,11 @@ export function gerarResumoSemana(
   }
 
   if (materiaisFaltaNomes.length > 0) {
-    partes.push(`• Materiais no estoque mínimo: ${materiaisFaltaNomes.slice(0, 3).join(', ')}.`)
+    const itensComAutor = materiaisFalta.slice(0, 3).map((m) => {
+      const autor = m.criado_por_nome || (m.criado_por_id && equipeNomesMap?.[m.criado_por_id])
+      return autor ? `${m.nome} (por ${autor})` : m.nome
+    })
+    partes.push(`• Materiais no estoque mínimo: ${itensComAutor.join(', ')}.`)
   } else {
     partes.push('• Estoque de materiais sob controle, sem itens abaixo do mínimo.')
   }

@@ -28,11 +28,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog'
+import { useAuth } from '@/contexts/AuthContext'
 import { mutateEntity } from '@/lib/syncService'
 import pb from '@/lib/pocketbase/client'
 import { registrarCalculoPersistente } from '@/lib/historicoStorage'
 
 export const Calculadora: React.FC = () => {
+  const { profile, config } = useAuth()
   // 1. ÁREA
   const [areaComp, setAreaComp] = useState('8')
   const [areaLarg, setAreaLarg] = useState('3')
@@ -178,12 +180,21 @@ export const Calculadora: React.FC = () => {
           .join('\n') +
         `\n\nAVISO: ${listaMateriaisModal.avisoLegal}`
 
+      const autorNome =
+        profile?.name ||
+        config?.nome_profissional ||
+        (pb.authStore.model as any)?.name ||
+        'Responsável'
+      const autorId = profile?.id || pb.authStore.model?.id || 'local_user'
+
       await mutateEntity('documentos', 'create', {
         id: 'doc_mat_' + Date.now(),
-        owner_id: pb.authStore.model?.id || 'local_user',
+        owner_id: autorId,
         tipo: 'lista_materiais',
         titulo: `Lista de Materiais - ${listaMateriaisModal.tipoServico.toUpperCase()} (${listaMateriaisModal.areaOuVolume} ${listaMateriaisModal.unidadeMedida})`,
         conteudo_texto: conteudoTexto,
+        criado_por_nome: autorNome,
+        criado_por_id: autorId,
       })
       setListaSalvaSucesso(true)
     } finally {

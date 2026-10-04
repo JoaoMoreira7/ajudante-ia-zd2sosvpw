@@ -20,9 +20,10 @@ import {
   SyncQueueItem,
   TarefaObra,
   LembreteObra,
+  EquipeMembro,
 } from '@/types/database'
 
-export type { SyncQueueItem, TarefaObra, LembreteObra } from '@/types/database'
+export type { SyncQueueItem, TarefaObra, LembreteObra, EquipeMembro } from '@/types/database'
 
 const DB_NAME = 'ajudante_ia_local_v2'
 const DB_VERSION = 4

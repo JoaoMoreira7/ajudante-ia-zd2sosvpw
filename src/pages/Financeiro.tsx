@@ -29,7 +29,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 
 export const Financeiro: React.FC = () => {
-  const { isOperador } = useAuth()
+  const { isOperador, profile, config } = useAuth()
   const [lancamentos, setLancamentos] = useState<FinanceiroLancamento[]>([])
   const [dialogAberto, setDialogAberto] = useState(false)
   const [filtroTipo, setFiltroTipo] = useState<'todos' | 'entrada' | 'saida'>('todos')
@@ -75,15 +75,20 @@ export const Financeiro: React.FC = () => {
     const v = parseFloat(valor)
     if (!descricao.trim() || isNaN(v) || v <= 0) return
 
+    const autorNome = profile?.name || config?.nome_profissional || 'Responsável'
+    const autorId = profile?.id || 'local_user'
+
     const novo: FinanceiroLancamento = {
       id: 'fin_' + Date.now(),
-      owner_id: 'local_user',
+      owner_id: autorId,
       tipo,
       descricao: descricao.trim(),
       valor: v,
       categoria,
       data,
       status: 'pago',
+      criado_por_nome: autorNome,
+      criado_por_id: autorId,
       created: new Date().toISOString(),
     }
 
@@ -351,6 +356,11 @@ export const Financeiro: React.FC = () => {
                           className={`ml-2 font-semibold ${item.status === 'pago' ? 'text-emerald-600' : 'text-amber-600'}`}
                         >
                           • {item.status === 'pago' ? 'Pago' : 'Pendente'}
+                        </span>
+                      )}
+                      {item.criado_por_nome && (
+                        <span className="ml-2 font-medium text-foreground/80">
+                          • 👤 Registrado por: {item.criado_por_nome}
                         </span>
                       )}
                     </span>
