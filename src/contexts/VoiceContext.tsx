@@ -24,6 +24,11 @@ import {
   limparChatPersistido,
   registrarCalculoPersistente,
 } from '@/lib/historicoStorage'
+import { ReciboItem, parseEdicaoFraseRecibo } from '@/lib/reciboEngine'
+import { parsePreferenciaConversa, aplicarPreferenciaAoTexto } from '@/lib/preferencesEngine'
+import { calcularParcelamento, parseParcelamentoOuRecorrencia } from '@/lib/recorrenciasEngine'
+import { calcularQuemMeDeve, identificarBaixaRecebimento } from '@/lib/quemMeDeveEngine'
+import { gerarResumoSemana, verificarAlertaPadraoGasto } from '@/lib/resumoSemanalEngine'
 
 export type CardAcaoTipo = 'material' | 'ocorrencia' | 'financeiro' | 'calculo' | 'aviso'
 
@@ -45,6 +50,7 @@ export interface ChatInteraction {
   tipoCalculo?: 'EXATO' | 'ESTIMATIVA' | 'TECNICA'
   timestamp: number
   cardsAcao?: CardAcaoItem[] // Melhoria 2: confirmação visual em cards coloridos compactos
+  recibo?: ReciboItem // Novo: Recibo estruturado estilo Meu Assessor (editar / desfazer 24h)
   detalhes?: {
     formula?: string
     passos?: string[]
@@ -53,6 +59,7 @@ export interface ChatInteraction {
     confirmacaoNecessaria?: boolean
     acaoPendente?: () => Promise<void>
     correcoesGlossario?: Array<{ original: string; corrigido: string; termoDetectado: string }>
+    ttsTexto?: string
   }
 }
 export interface DialogoOrcamentoVoz {
@@ -89,11 +96,14 @@ export interface VoiceContextType {
   isProcessing: boolean
   statusText: string
   currentPendingConfirm: ChatInteraction | null
+  ultimoRecibo: ReciboItem | null
   processUserInput: (input: string, audioDurationSeconds?: number) => Promise<void>
   confirmCurrentAction: () => Promise<void>
   rejectCurrentAction: () => void
   clearContext: () => void
   undoLastAction: () => Promise<string>
+  desfazerRecibo: (recibo: ReciboItem) => Promise<void>
+  solicitarEdicaoRecibo: (recibo: ReciboItem) => void
   canUndo: boolean
 }
 
@@ -132,10 +142,71 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isProcessing, setIsProcessing] = useState(false)
   const [statusText, setStatusText] = useState('Pronto')
   const [currentPendingConfirm, setCurrentPendingConfirm] = useState<ChatInteraction | null>(null)
+  const [ultimoRecibo, setUltimoRecibo] = useState<ReciboItem | null>(null)
 
   // Empilhar ação reversível local por dispositivo
   const pushUndo = useCallback((action: ReversibleAction) => {
     setUndoStack((prev) => [action, ...prev.slice(0, 19)])
+  }, [])
+
+  // Desfazer recibo específico integrado (<50ms)
+  const desfazerRecibo = useCallback(
+    async (recibo: ReciboItem) => {
+      if (!recibo) return
+      const idAlvo = recibo.entidadeId
+      const ent = recibo.entidade
+
+      try {
+        if (ent === 'financeiro') {
+          await mutateEntity('financeiro', 'delete', { id: idAlvo })
+        } else if (ent === 'materiais_estoque') {
+          await mutateEntity('materiais_estoque', 'delete', { id: idAlvo })
+        } else if (ent === 'diario_obra') {
+          await localDB.delete('diario_obra', idAlvo)
+        }
+
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'recibo_undone_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Recibo desfeito com sucesso! O registro de ${recibo.descricao} foi removido.`,
+            timestamp: Date.now(),
+          },
+        ])
+
+        if (ultimoRecibo?.id === recibo.id) {
+          setUltimoRecibo(null)
+        }
+      } catch {
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'recibo_err_' + Date.now(),
+            autor: 'ajudante',
+            texto: 'Não foi possível desfazer este recibo. Tente novamente.',
+            timestamp: Date.now(),
+          },
+        ])
+      }
+    },
+    [ultimoRecibo],
+  )
+
+  // Solicitar edição por frase
+  const solicitarEdicaoRecibo = useCallback((recibo: ReciboItem) => {
+    setInteractions((prev) => [
+      ...prev,
+      {
+        id: 'edit_prompt_' + Date.now(),
+        autor: 'ajudante',
+        texto: `Para editar esse recibo, basta falar ou digitar a correção diretamente aqui na conversa. Exemplo: "o valor é 92", "a quantidade é 30" ou "a categoria é combustível".`,
+        timestamp: Date.now(),
+        detalhes: {
+          sugestoes: ['o valor é 92', 'a quantidade é 40', 'Desfaz'],
+        },
+      },
+    ])
   }, [])
 
   const undoLastAction = useCallback(async (): Promise<string> => {
@@ -204,6 +275,232 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         },
       },
     ])
+
+    // A. VERIFICA SE O USUÁRIO ESTÁ RESPONDENDO CONFIRMAÇÃO PENDENTE (ex: "pode", "cancela", "confirma")
+    if (currentPendingConfirm) {
+      const lower = text.toLowerCase().trim()
+      if (
+        lower === 'sim' ||
+        lower === 'pode' ||
+        lower === 'confirma' ||
+        lower === 'confirmar' ||
+        lower === 'com certeza' ||
+        lower === 'positivo' ||
+        lower === 'beleza' ||
+        lower === 'ok'
+      ) {
+        await confirmCurrentAction()
+        return
+      }
+      if (
+        lower === 'não' ||
+        lower === 'nao' ||
+        lower === 'cancela' ||
+        lower === 'cancelar' ||
+        lower === 'deixa' ||
+        lower === 'esquece'
+      ) {
+        rejectCurrentAction()
+        return
+      }
+    }
+
+    // B. VERIFICA SE É UMA EDIÇÃO POR FRASE DO ÚLTIMO RECIBO ("o valor é 92", "a quantidade é 40")
+    const edicaoRecibo = parseEdicaoFraseRecibo(text, ultimoRecibo)
+    if (edicaoRecibo && ultimoRecibo) {
+      try {
+        let valorAntes: string | number = ''
+        let valorDepois: string | number = edicaoRecibo.novoValor
+
+        if (ultimoRecibo.entidade === 'financeiro') {
+          const finList = await localDB.getAll('financeiro')
+          const finItem = finList.find((f) => f.id === ultimoRecibo.entidadeId)
+          if (finItem) {
+            if (edicaoRecibo.campo === 'valor') {
+              valorAntes = `R$ ${finItem.valor.toFixed(2)}`
+              valorDepois = `R$ ${(edicaoRecibo.novoValor as number).toFixed(2)}`
+              await mutateEntity('financeiro', 'update', {
+                ...finItem,
+                valor: edicaoRecibo.novoValor as number,
+              })
+            } else if (edicaoRecibo.campo === 'categoria') {
+              valorAntes = finItem.categoria
+              await mutateEntity('financeiro', 'update', {
+                ...finItem,
+                categoria: edicaoRecibo.novoValor as any,
+              })
+            } else if (edicaoRecibo.campo === 'descricao') {
+              valorAntes = finItem.descricao
+              await mutateEntity('financeiro', 'update', {
+                ...finItem,
+                descricao: edicaoRecibo.novoValor as string,
+              })
+            }
+          }
+        } else if (ultimoRecibo.entidade === 'materiais_estoque') {
+          const matList = await localDB.getAll('materiais_estoque')
+          const matItem = matList.find((m) => m.id === ultimoRecibo.entidadeId)
+          if (matItem) {
+            if (edicaoRecibo.campo === 'quantidade') {
+              valorAntes = matItem.quantidade
+              await mutateEntity('materiais_estoque', 'update', {
+                ...matItem,
+                quantidade: edicaoRecibo.novoValor as number,
+              })
+            } else if (edicaoRecibo.campo === 'descricao') {
+              valorAntes = matItem.nome
+              await mutateEntity('materiais_estoque', 'update', {
+                ...matItem,
+                nome: edicaoRecibo.novoValor as string,
+              })
+            }
+          }
+        }
+
+        const reciboAtualizado: ReciboItem = {
+          ...ultimoRecibo,
+          valor:
+            edicaoRecibo.campo === 'valor'
+              ? (edicaoRecibo.novoValor as number)
+              : ultimoRecibo.valor,
+          quantidade:
+            edicaoRecibo.campo === 'quantidade'
+              ? (edicaoRecibo.novoValor as number)
+              : ultimoRecibo.quantidade,
+          categoria:
+            edicaoRecibo.campo === 'categoria'
+              ? (edicaoRecibo.novoValor as string)
+              : ultimoRecibo.categoria,
+          descricao:
+            edicaoRecibo.campo === 'descricao'
+              ? (edicaoRecibo.novoValor as string)
+              : ultimoRecibo.descricao,
+          alteracaoAnterior: {
+            campo: edicaoRecibo.campo,
+            valorAntes,
+            valorDepois,
+          },
+        }
+
+        setUltimoRecibo(reciboAtualizado)
+
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'resp_edit_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Recibo atualizado por frase: ${edicaoRecibo.campo} alterado com sucesso!`,
+            tipoCalculo: 'EXATO',
+            timestamp: Date.now(),
+            recibo: reciboAtualizado,
+          },
+        ])
+        return
+      } catch {
+        // Fallback se edição falhar
+      }
+    }
+
+    // C. PREFERÊNCIAS POR CONVERSA ("me chama de Zé", "sem emoji", "lembra que...")
+    const prefDetectada = parsePreferenciaConversa(text)
+    if (prefDetectada) {
+      if (prefDetectada.tipo === 'apelido') {
+        const apelido = prefDetectada.valor
+        await localDB.put('configuracoes', {
+          ...config,
+          apelido_usuario: apelido,
+        })
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'pref_' + Date.now(),
+            autor: 'ajudante',
+            texto: prefDetectada.mensagemConfirmacao,
+            timestamp: Date.now(),
+          },
+        ])
+        return
+      }
+      if (prefDetectada.tipo === 'tom') {
+        const tom = prefDetectada.valor
+        await localDB.put('configuracoes', {
+          ...config,
+          tom_conversa: tom,
+        })
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'pref_' + Date.now(),
+            autor: 'ajudante',
+            texto: prefDetectada.mensagemConfirmacao,
+            timestamp: Date.now(),
+          },
+        ])
+        return
+      }
+      if (prefDetectada.tipo === 'lembrete_adicionar') {
+        const nota = prefDetectada.valor
+        const notasAtuais = config?.notas_contexto || []
+        const novasNotas = [
+          ...notasAtuais,
+          { id: 'nota_' + Date.now(), texto: nota, data: new Date().toISOString() },
+        ]
+        await localDB.put('configuracoes', {
+          ...config,
+          notas_contexto: novasNotas,
+        })
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'pref_' + Date.now(),
+            autor: 'ajudante',
+            texto: prefDetectada.mensagemConfirmacao,
+            timestamp: Date.now(),
+          },
+        ])
+        return
+      }
+      if (prefDetectada.tipo === 'lembrete_remover') {
+        const notasAtuais = config?.notas_contexto || []
+        const novasNotas = notasAtuais.slice(0, -1)
+        await localDB.put('configuracoes', {
+          ...config,
+          notas_contexto: novasNotas,
+        })
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'pref_' + Date.now(),
+            autor: 'ajudante',
+            texto: prefDetectada.mensagemConfirmacao,
+            timestamp: Date.now(),
+          },
+        ])
+        return
+      }
+      if (prefDetectada.tipo === 'lembrete_consultar') {
+        const notasAtuais = config?.notas_contexto || []
+        let msg = ''
+        if (notasAtuais.length === 0) {
+          msg =
+            'Não tenho nenhuma nota de contexto guardada no momento. Para guardar, diga "lembra que...".'
+        } else {
+          msg =
+            'Aqui estão as anotações que você me pediu para lembrar:\n\n' +
+            notasAtuais.map((n, idx) => `${idx + 1}. ${n.texto}`).join('\n')
+        }
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'pref_' + Date.now(),
+            autor: 'ajudante',
+            texto: msg,
+            timestamp: Date.now(),
+          },
+        ])
+        return
+      }
+    }
 
     // Se o limite de minutos de áudio por plano foi ultrapassado:
     // REGRA DE OURO: Bloqueia apenas a nuvem / IA; permite processamento determinístico local!
@@ -976,6 +1273,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       let passos: string[] | undefined
       let aviso: string | undefined
       let sugestoes: string[] | undefined
+      let ttsTexto: string | undefined
 
       if (parsed.intent === 'calc_area') {
         const comp = parsed.params.comprimento
@@ -1157,60 +1455,90 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         respostaTexto =
           'Seu perfil de acesso é Operador. O registro de pagamentos e entradas financeiras é restrito ao Dono da obra.'
         tipoBadge = 'EXATO'
-      } else if (parsed.intent === 'registrar_saida') {
-        // OPERAÇÃO FINANCEIRA: CONFIRMAÇÃO OBRIGATÓRIA SE >= R$ 1.000 OU EXCLUSÕES
-        const val = parsed.params.valor
-        const cat = parsed.params.categoria
-        const desc = parsed.params.descricao
+      } else if (parsed.intent === 'quem_me_deve') {
+        const finList = await localDB.getAll('financeiro')
+        const cliList = await localDB.getAll('clientes')
+        const obrasList = await localDB.getAll('obras')
+        const relatorio = calcularQuemMeDeve(finList, cliList, obrasList, isOperador)
+        respostaTexto = relatorio.textoFormatado
+        tipoBadge = 'EXATO'
+        sugestoes = isOperador ? [] : ['Recebi 450 do Rafael', 'Consultar saldo', 'Desfaz']
+      } else if (parsed.intent === 'baixa_recebimento') {
+        const finList = await localDB.getAll('financeiro')
+        const cliList = await localDB.getAll('clientes')
+        const baixaInfo = identificarBaixaRecebimento(text, finList, cliList)
+        if (baixaInfo && baixaInfo.lancamentoAlvo) {
+          const alvo = baixaInfo.lancamentoAlvo
+          await mutateEntity('financeiro', 'update', {
+            ...alvo,
+            status: 'pago',
+          })
+          respostaTexto = `Baixa confirmada com sucesso! Recebimento de R$ ${alvo.valor.toFixed(2)} (${alvo.descricao}) marcado como pago.`
+          tipoBadge = 'EXATO'
+          sugestoes = ['Quem está me devendo?', 'Consultar saldo', 'Desfaz']
 
-        const executeSaida = async () => {
-          const newId = await mutateEntity('financeiro', 'create', {
+          const novoRecibo: ReciboItem = {
+            id: 'rec_' + Date.now(),
+            tipo: 'recebimento',
+            entidade: 'financeiro',
+            entidadeId: alvo.id,
+            titulo: 'Recebimento Baixado',
+            descricao: alvo.descricao,
+            valor: alvo.valor,
+            data: new Date().toISOString().split('T')[0],
+            status: 'Pago e baixado',
+            timestamp: Date.now(),
+          }
+          setUltimoRecibo(novoRecibo)
+        } else {
+          // Se não encontrou pendente, cria lançamento de entrada como pago
+          const v = parsed.params.valor || 0
+          const cli = parsed.params.clienteNome || 'Cliente'
+          const novoId = await mutateEntity('financeiro', 'create', {
             id: 'fin_' + Date.now(),
             owner_id: pb.authStore.model?.id || 'local_user',
-            tipo: 'saida' as const,
-            categoria: cat as any,
-            descricao: desc,
-            valor: val,
+            tipo: 'entrada',
+            categoria: 'pagamento',
+            descricao: `Recebido de ${cli}`,
+            valor: v,
             data: new Date().toISOString().split('T')[0],
-            status: 'pago' as const,
+            status: 'pago',
           })
-          pushUndo({
-            id: 'undo_' + Date.now(),
-            descricao: `Saída de R$ ${val.toFixed(2)} (${desc})`,
-            timestamp: Date.now(),
-            desfazer: async () => {
-              await mutateEntity('financeiro', 'delete', { id: newId })
-            },
-          })
-        }
-
-        if (val >= 1000) {
-          const confirmMsg: ChatInteraction = {
-            id: 'confirm_' + Date.now(),
-            autor: 'ajudante',
-            texto: `Você deseja registrar uma saída de R$ ${val.toFixed(2)} (${cat} - ${desc})?`,
-            timestamp: Date.now(),
-            detalhes: {
-              confirmacaoNecessaria: true,
-              acaoPendente: executeSaida,
-            },
-          }
-          setCurrentPendingConfirm(confirmMsg)
-          setInteractions((prev) => [...prev, confirmMsg])
-          return
-        } else {
-          await executeSaida()
-          respostaTexto = `Registrada saída de R$ ${val.toFixed(2)} (${desc}).`
+          respostaTexto = `Recebimento de R$ ${v.toFixed(2)} (${cli}) registrado e marcado como pago!`
           tipoBadge = 'EXATO'
-          sugestoes = ['Desfaz', 'Consultar saldo', 'Registrar outra saída']
+          sugestoes = ['Quem está me devendo?', 'Consultar saldo', 'Desfaz']
+
+          const novoRecibo: ReciboItem = {
+            id: 'rec_' + Date.now(),
+            tipo: 'recebimento',
+            entidade: 'financeiro',
+            entidadeId: novoId,
+            titulo: 'Recebimento Registrado',
+            descricao: `Recebido de ${cli}`,
+            valor: v,
+            data: new Date().toISOString().split('T')[0],
+            status: 'Pago',
+            timestamp: Date.now(),
+          }
+          setUltimoRecibo(novoRecibo)
         }
+      } else if (parsed.intent === 'resumo_semanal') {
+        const obrasList = await localDB.getAll('obras')
+        const finList = await localDB.getAll('financeiro')
+        const orcList = await localDB.getAll('orcamentos')
+        const matList = await localDB.getAll('materiais_estoque')
+        const resumo = gerarResumoSemana(obrasList, finList, orcList, matList, isOperador)
+        respostaTexto = resumo.textoFormatado
+        ttsTexto = resumo.ttsTexto
+        tipoBadge = 'TECNICA'
+        sugestoes = ['O que está acabando?', 'Quem está me devendo?', 'Ver obras']
       } else if (parsed.intent === 'registrar_entrada') {
-        // ENTRADA FINANCEIRA COM CONFIRMAÇÃO SE >= R$ 1.000
         const val = parsed.params.valor
         const desc = parsed.params.descricao
 
+        let idCriado = ''
         const executeEntrada = async () => {
-          const newId = await mutateEntity('financeiro', 'create', {
+          idCriado = await mutateEntity('financeiro', 'create', {
             id: 'fin_' + Date.now(),
             owner_id: pb.authStore.model?.id || 'local_user',
             tipo: 'entrada' as const,
@@ -1225,9 +1553,24 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             descricao: `Entrada de R$ ${val.toFixed(2)} (${desc})`,
             timestamp: Date.now(),
             desfazer: async () => {
-              await mutateEntity('financeiro', 'delete', { id: newId })
+              await mutateEntity('financeiro', 'delete', { id: idCriado })
             },
           })
+
+          const rec: ReciboItem = {
+            id: 'rec_' + Date.now(),
+            tipo: 'recebimento',
+            entidade: 'financeiro',
+            entidadeId: idCriado,
+            titulo: 'Recebimento Registrado',
+            descricao: desc,
+            valor: val,
+            categoria: 'pagamento',
+            data: new Date().toISOString().split('T')[0],
+            status: 'Gravado com sucesso',
+            timestamp: Date.now(),
+          }
+          setUltimoRecibo(rec)
         }
 
         if (val >= 1000) {
@@ -1298,6 +1641,21 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           })
         }
 
+        const rec: ReciboItem = {
+          id: 'rec_' + Date.now(),
+          tipo: 'material',
+          entidade: 'materiais_estoque',
+          entidadeId: novoId,
+          titulo: 'Material em Estoque',
+          descricao: mat,
+          quantidade: qtd,
+          unidade: un,
+          data: new Date().toISOString().split('T')[0],
+          status: 'Gravado com sucesso',
+          timestamp: Date.now(),
+        }
+        setUltimoRecibo(rec)
+
         respostaTexto = `Registrado no estoque: ${qtd} ${un}(s) de ${mat}.`
         tipoBadge = 'EXATO'
         sugestoes = ['Desfaz', 'O que está acabando?', 'Faz uma lista de compras']
@@ -1318,9 +1676,10 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const obras = await localDB.getAll('obras')
         const obraAlvo = obras[0]
         const descQtd = qtd > 0 ? ` (${qtd} m²)` : ''
+        const novoDiaId = 'dia_' + Date.now()
         if (obraAlvo) {
           await localDB.put('diario_obra', {
-            id: 'dia_' + Date.now(),
+            id: novoDiaId,
             owner_id: 'local_user',
             obra_id: obraAlvo.id,
             data: new Date().toISOString(),
@@ -1330,9 +1689,33 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           })
           respostaTexto = `Atividade registrada no diário da obra "${obraAlvo.titulo}": ${serv}${descQtd}.`
         } else {
+          await localDB.put('diario_obra', {
+            id: novoDiaId,
+            owner_id: 'local_user',
+            obra_id: 'obra_padrao',
+            data: new Date().toISOString(),
+            servico: serv,
+            quantidade: qtd,
+            observacoes: parsed.params.textoCompleto || text,
+          })
           respostaTexto = `Atividade anotada no diário: ${serv}${descQtd}.`
         }
         tipoBadge = 'EXATO'
+
+        const rec: ReciboItem = {
+          id: 'rec_' + Date.now(),
+          tipo: 'atividade',
+          entidade: 'diario_obra',
+          entidadeId: novoDiaId,
+          titulo: 'Atividade no Diário',
+          descricao: serv,
+          quantidade: qtd > 0 ? qtd : undefined,
+          obraNome: obraAlvo?.titulo,
+          data: new Date().toISOString().split('T')[0],
+          status: 'Gravado com sucesso',
+          timestamp: Date.now(),
+        }
+        setUltimoRecibo(rec)
       } else {
         // Se a IA nativa do Skip Cloud tiver gerado uma resposta conversacional humana de qualidade
         if (skipAgentReplyText) {
@@ -1357,17 +1740,26 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
+      // Aplica preferências ativas de apelido e tom da conversa
+      const textoFinalAjustado = aplicarPreferenciaAoTexto(
+        respostaTexto,
+        config?.apelido_usuario,
+        config?.tom_conversa,
+      )
+
       const assistantMsg: ChatInteraction = {
         id: 'resp_' + Date.now(),
         autor: 'ajudante',
-        texto: respostaTexto,
+        texto: textoFinalAjustado,
         tipoCalculo: tipoBadge,
         timestamp: Date.now(),
+        recibo: ultimoRecibo || undefined,
         detalhes: {
           formula,
           passos,
           aviso,
           sugestoes,
+          ttsTexto,
         },
       }
 
@@ -1437,11 +1829,14 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isProcessing,
         statusText,
         currentPendingConfirm,
+        ultimoRecibo,
         processUserInput,
         confirmCurrentAction,
         rejectCurrentAction,
         clearContext,
         undoLastAction,
+        desfazerRecibo,
+        solicitarEdicaoRecibo,
         canUndo: undoStack.length > 0,
       }}
     >

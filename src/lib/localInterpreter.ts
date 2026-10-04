@@ -38,6 +38,37 @@ export function interpretCommandLocally(text: string): LocalParsedIntent {
     }
   }
 
+  // 1.1 "Quem está me devendo?", "Valores a receber"
+  if (
+    norm.includes('quem me deve') ||
+    norm.includes('quem esta me devendo') ||
+    norm.includes('quem está me devendo') ||
+    norm.includes('quem ta me devendo') ||
+    norm.includes('quem tá me devendo') ||
+    norm.includes('valores a receber')
+  ) {
+    return {
+      intent: 'quem_me_deve',
+      confidence: 0.98,
+      params: {},
+      descricaoHumana: 'Consultar clientes com valores a receber e pendências.',
+    }
+  }
+
+  // 1.2 "Como foi minha semana?" / "Resumo da semana"
+  if (
+    norm.includes('como foi minha semana') ||
+    norm.includes('resumo da semana') ||
+    norm.includes('resumo semanal')
+  ) {
+    return {
+      intent: 'resumo_semanal',
+      confidence: 0.98,
+      params: {},
+      descricaoHumana: 'Apresentar resumo semanal de obras, gastos e pendências.',
+    }
+  }
+
   // 2. Parede com desconto de vão / porta: "Tira a porta de 80 por 210" / "desconta a porta"
   const matchPorta = norm.match(
     /(?:tira|desconta|menos)\s+(?:a\s+)?(?:porta|janela|vao|abertura)\s+(?:de\s+)?(\d+[.,]?\d*)\s*(?:por|x|\*)\s*(\d+[.,]?\d*)/,

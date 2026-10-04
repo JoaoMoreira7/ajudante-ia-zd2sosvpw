@@ -333,9 +333,26 @@ export const Financeiro: React.FC = () => {
                   <div>
                     <span className="font-bold text-sm text-foreground block">
                       {item.descricao}
+                      {item.total_parcelas && item.total_parcelas > 1 && (
+                        <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                          {item.parcela_atual || 1}/{item.total_parcelas}
+                        </span>
+                      )}
+                      {item.recorrente && (
+                        <span className="ml-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300">
+                          Recorrente dia {item.dia_vencimento || 'fixo'}
+                        </span>
+                      )}
                     </span>
                     <span className="text-xs text-muted-foreground capitalize">
                       {item.categoria} • {formatarDataSegura(item.data) || item.data}
+                      {item.status && (
+                        <span
+                          className={`ml-2 font-semibold ${item.status === 'pago' ? 'text-emerald-600' : 'text-amber-600'}`}
+                        >
+                          • {item.status === 'pago' ? 'Pago' : 'Pendente'}
+                        </span>
+                      )}
                     </span>
                   </div>
                 </div>

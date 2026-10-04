@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-04T00:00:15.869Z",
+  "generatedAt": "2026-10-04T02:49:34.545Z",
   "collections": [
     {
       "name": "users",
@@ -465,6 +465,43 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "recorrente",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "dia_vencimento",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "parcela_atual",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "total_parcelas",
+          "type": "number",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "grupo_parcelamento_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cliente_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "clientes"
         }
       ],
       "indexes": [
@@ -870,6 +907,25 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "apelido_usuario",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "tom_conversa",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["padrao", "curto", "sem_emoji"]
+        },
+        {
+          "name": "notas_contexto",
+          "type": "json",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": ["CREATE UNIQUE INDEX idx_config_owner ON configuracoes (owner_id)"]

@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { WalkieTalkieButton } from '@/components/WalkieTalkieButton'
 import { ActionCardList } from '@/components/ActionCardList'
+import { ReciboCard } from '@/components/ReciboCard'
 import {
   obterConsumoAudio,
   formatarMinutosESegundos,
@@ -48,6 +49,8 @@ export const Falar: React.FC = () => {
     confirmCurrentAction,
     rejectCurrentAction,
     undoLastAction,
+    desfazerRecibo,
+    solicitarEdicaoRecibo,
     clearContext,
     canUndo,
   } = useVoiceContext()
@@ -602,6 +605,19 @@ export const Falar: React.FC = () => {
                   </div>
                 )}
 
+                {/* Recibo Estruturado estilo Meu Assessor (Editar e Desfazer valendo 24h) */}
+                {msg.recibo && (
+                  <div className="mt-2">
+                    <ReciboCard
+                      recibo={msg.recibo}
+                      onDesfazer={desfazerRecibo}
+                      onEditar={solicitarEdicaoRecibo}
+                      isOperador={isOperador}
+                      isSimpleMode={isModoSimples}
+                    />
+                  </div>
+                )}
+
                 {/* Fórmula se houver cálculo matemático determinístico */}
                 {msg.detalhes?.formula && (
                   <div className="mt-2 p-2 sm:p-2.5 rounded-xl bg-muted/60 font-mono text-xs font-bold text-foreground border border-border/50">
@@ -668,11 +684,11 @@ export const Falar: React.FC = () => {
                   {!isUser ? (
                     <button
                       type="button"
-                      onClick={() => speakText(msg.texto)}
+                      onClick={() => speakText(msg.detalhes?.ttsTexto || msg.texto)}
                       className="text-[11px] font-bold flex items-center gap-1 hover:text-emerald-600 transition-colors py-0.5 px-1 rounded-md hover:bg-muted/40 cursor-pointer"
                     >
-                      <Volume2 className="w-3 h-3" />
-                      <span>Ouvir</span>
+                      <Volume2 className="w-3.5 h-3.5" />
+                      <span>{msg.detalhes?.ttsTexto ? 'Ouvir resumo' : 'Ouvir'}</span>
                     </button>
                   ) : (
                     <span />

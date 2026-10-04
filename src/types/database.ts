@@ -117,6 +117,7 @@ export interface FinanceiroLancamento {
   id: string
   owner_id: string
   obra_id?: string
+  cliente_id?: string
   tipo: 'entrada' | 'saida'
   categoria:
     | 'pagamento'
@@ -136,6 +137,11 @@ export interface FinanceiroLancamento {
   valor: number
   data: string
   status: 'pendente' | 'pago' | 'vencido'
+  recorrente?: boolean
+  dia_vencimento?: number
+  parcela_atual?: number
+  total_parcelas?: number
+  grupo_parcelamento_id?: string
   created?: string
   updated?: string
 }
@@ -204,6 +210,9 @@ export interface ConfiguracoesApp {
   nome_empresa?: string
   empresa?: string
   telefone?: string
+  apelido_usuario?: string
+  tom_conversa?: 'padrao' | 'curto' | 'sem_emoji'
+  notas_contexto?: Array<{ id: string; texto: string; data: string }>
   created?: string
   updated?: string
 }

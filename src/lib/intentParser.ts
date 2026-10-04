@@ -46,8 +46,12 @@ export function parseLocalIntent(text: string, context?: Record<string, any>): P
     }
   }
 
-  // 1.1 RESPOSTAS DE SIM / NÃO / CONFIRMAÇÃO
-  if (/^(sim|claro|pode|confirma|confirmar|com certeza|positivo|isso|beleza|ok)$/.test(clean)) {
+  // 1.1 RESPOSTAS DE SIM / NÃO / CONFIRMAÇÃO (incluindo "pode", "cancela", "ajustar")
+  if (
+    /^(sim|claro|pode|confirma|confirmar|com certeza|positivo|isso|beleza|ok|manda ver|valeu)$/.test(
+      clean,
+    )
+  ) {
     return {
       intent: 'resposta_afirmativa',
       confidence: 0.98,
@@ -56,13 +60,64 @@ export function parseLocalIntent(text: string, context?: Record<string, any>): P
       categoriaAcao: 'sistema',
     }
   }
-  if (/^(não|nao|negativo|nunca|dispensa|pula|sem material|sem materiais)$/.test(clean)) {
+  if (
+    /^(não|nao|negativo|nunca|dispensa|pula|sem material|sem materiais|cancela|cancelar|deixa pra la|deixa pra lá)$/.test(
+      clean,
+    )
+  ) {
     return {
       intent: 'resposta_negativa',
       confidence: 0.98,
       params: { resposta: false },
       rawText: text,
       categoriaAcao: 'sistema',
+    }
+  }
+
+  // 1.2 QUEM ME DEVE / CONTAS A RECEBER
+  if (
+    /\b(quem est[áa] me devendo|quem me deve|quem ta me devendo|quem tá me devendo|valores a receber|contas a receber|o que tenho pra receber|quanto tenho pra receber)\b/i.test(
+      clean,
+    )
+  ) {
+    return {
+      intent: 'quem_me_deve',
+      confidence: 0.98,
+      params: {},
+      rawText: text,
+      categoriaAcao: 'financeiro',
+    }
+  }
+
+  // 1.3 RESUMO DA SEMANA
+  if (
+    /\b(como foi minha semana|resumo da semana|resumo semanal|como foram as coisas essa semana|balan[çc]o da semana)\b/i.test(
+      clean,
+    )
+  ) {
+    return {
+      intent: 'resumo_semanal',
+      confidence: 0.98,
+      params: {},
+      rawText: text,
+      categoriaAcao: 'sistema',
+    }
+  }
+
+  // 1.4 BAIXA DE RECEBIMENTO ("recebi os 450 do Rafael")
+  const baixaMatch = clean.match(
+    /(?:recebi|deu\s+baixa|baixa\s+de|entrou\s+o\s+pagamento\s+de)\s+(?:os\s+|as\s+|o\s+|a\s+)?(?:r\$\s*)?([0-9.,]+)(?:\s+(?:do|da|de|cliente)\s+([a-zá-ú\s]+))?/i,
+  )
+  if (baixaMatch) {
+    const v = parseFloat(baixaMatch[1].replace('.', '').replace(',', '.'))
+    const cli = (baixaMatch[2] || '').trim()
+    return {
+      intent: 'baixa_recebimento',
+      confidence: 0.95,
+      params: { valor: v, clienteNome: cli },
+      rawText: text,
+      categoriaAcao: 'financeiro',
+      requerConfirmacao: false,
     }
   }
 
