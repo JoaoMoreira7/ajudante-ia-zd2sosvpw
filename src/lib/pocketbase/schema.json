@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-04T02:58:21.498Z",
+  "generatedAt": "2026-10-04T03:11:26.660Z",
   "collections": [
     {
       "name": "users",
@@ -82,6 +82,13 @@
           "type": "json",
           "required": false,
           "system": false
+        },
+        {
+          "name": "dono_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
         }
       ],
       "indexes": [
@@ -508,6 +515,18 @@
           "type": "text",
           "required": false,
           "system": false
+        },
+        {
+          "name": "criado_por_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criado_por_id",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -584,6 +603,18 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "criado_por_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criado_por_id",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -659,6 +690,18 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "criado_por_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criado_por_id",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -754,6 +797,18 @@
         },
         {
           "name": "data_foto",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criado_por_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criado_por_id",
           "type": "text",
           "required": false,
           "system": false
@@ -1434,6 +1489,18 @@
           "required": false,
           "system": false,
           "autodateTriggers": ["onCreate", "onUpdate"]
+        },
+        {
+          "name": "criado_por_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criado_por_id",
+          "type": "text",
+          "required": false,
+          "system": false
         }
       ],
       "indexes": [
@@ -1524,6 +1591,90 @@
         }
       ],
       "indexes": ["CREATE INDEX idx_lembretes_owner ON lembretes_obra (owner_id)"]
+    },
+    {
+      "name": "equipe_membros",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && (owner_id = @request.auth.id || operador_user_id = @request.auth.id)",
+        "view": "@request.auth.id != '' && (owner_id = @request.auth.id || operador_user_id = @request.auth.id)",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && owner_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "operador_user_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "email",
+          "type": "email",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "telefone",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "cargo",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["operador", "encarregado", "pedreiro", "ajudante"]
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["ativo", "convidado", "inativo"]
+        },
+        {
+          "name": "obras_permitidas",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "obras"
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_equipe_owner ON equipe_membros (owner_id)",
+        "CREATE INDEX idx_equipe_operador ON equipe_membros (operador_user_id)"
+      ]
     }
   ]
 }

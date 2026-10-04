@@ -39,6 +39,7 @@ export interface DBStores {
   sync_queue: SyncQueueItem
   tarefas_obra: TarefaObra
   lembretes_obra: LembreteObra
+  equipe_membros: EquipeMembro
 }
 
 export type StoreName = keyof DBStores
@@ -67,6 +68,7 @@ class LocalDatabase {
       'sync_queue',
       'tarefas_obra',
       'lembretes_obra',
+      'equipe_membros',
     ]
     stores.forEach((st) => {
       this.memoryFallback.set(st, new Map())

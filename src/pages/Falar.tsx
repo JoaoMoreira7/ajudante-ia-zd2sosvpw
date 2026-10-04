@@ -2,6 +2,16 @@ import React, { useState, useEffect, useRef } from 'react'
 import { useVoiceContext } from '@/contexts/VoiceContext'
 import { useVoiceHybrid } from '@/hooks/useVoiceHybrid'
 import { useAuth } from '@/contexts/AuthContext'
+import { comprimirImagemOffline } from '@/lib/imageCompressor'
+import { Camera, Image as ImageIcon } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import {
   Mic,
   MicOff,
@@ -54,6 +64,7 @@ export const Falar: React.FC = () => {
     solicitarEdicaoRecibo,
     clearContext,
     canUndo,
+    anexarFotoComLegenda,
   } = useVoiceContext()
 
   const {
@@ -72,6 +83,11 @@ export const Falar: React.FC = () => {
 
   const [inputText, setInputText] = useState('')
   const [modalTarefasOpen, setModalTarefasOpen] = useState(false)
+  const [fotoPendenteBase64, setFotoPendenteBase64] = useState<string | null>(null)
+  const [modalFotoLegendaOpen, setModalFotoLegendaOpen] = useState(false)
+  const [legendaFotoInput, setLegendaFotoInput] = useState('')
+  const [obraAlvoFoto, setObraAlvoFoto] = useState('')
+  const [salvandoFoto, setSalvandoFoto] = useState(false)
   const [initialTabTarefas, setInitialTabTarefas] = useState<'tarefas' | 'lembretes' | 'tetos'>(
     'tarefas',
   )
@@ -224,6 +240,43 @@ export const Falar: React.FC = () => {
     }
   }
 
+  const handleSelecionarFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const res = await comprimirImagemOffline(file, { maxWidth: 1280, quality: 0.75 })
+      setFotoPendenteBase64(res.base64)
+      setModalFotoLegendaOpen(true)
+      // Se houver texto digitado no chat, já aproveita como legenda inicial
+      if (inputText.trim()) {
+        setLegendaFotoInput(inputText.trim())
+        setInputText('')
+      }
+    } catch {
+      alert('Não foi possível carregar a foto selecionada. Tente novamente.')
+    } finally {
+      e.target.value = ''
+    }
+  }
+
+  const handleConfirmarFotoComLegenda = async () => {
+    if (!fotoPendenteBase64) return
+    setSalvandoFoto(true)
+    try {
+      await anexarFotoComLegenda(
+        fotoPendenteBase64,
+        legendaFotoInput || 'Registro fotográfico da obra',
+        obraAlvoFoto || undefined,
+      )
+      setModalFotoLegendaOpen(false)
+      setFotoPendenteBase64(null)
+      setLegendaFotoInput('')
+      setObraAlvoFoto('')
+    } finally {
+      setSalvandoFoto(false)
+    }
+  }
+
   const isModoSimples = config?.modo === 'simples'
 
   return (
@@ -233,6 +286,78 @@ export const Falar: React.FC = () => {
         onOpenChange={setModalTarefasOpen}
         initialTab={initialTabTarefas}
       />
+
+      {/* MODAL DE FOTO COM LEGENDA POR VOZ/TEXTO */}
+      <Dialog open={modalFotoLegendaOpen} onOpenChange={setModalFotoLegendaOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Camera className="w-5 h-5 text-emerald-600" />
+              Foto com Legenda no Diário da Obra
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 mt-2">
+            {fotoPendenteBase64 && (
+              <div className="aspect-video w-full rounded-xl overflow-hidden bg-muted border border-border relative">
+                <img
+                  src={fotoPendenteBase64}
+                  alt="Pré-visualização da foto"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs font-bold text-foreground block mb-1">
+                Legenda da Foto (diga ou digite o que é) *
+              </label>
+              <Input
+                placeholder="Ex: Vazamento no cano do banheiro, reboco da sala..."
+                value={legendaFotoInput}
+                onChange={(e) => setLegendaFotoInput(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-foreground block mb-1">
+                Nome da Obra (opcional — detectado automaticamente)
+              </label>
+              <Input
+                placeholder="Ex: Obra do João, Reforma Centro..."
+                value={obraAlvoFoto}
+                onChange={(e) => setObraAlvoFoto(e.target.value)}
+              />
+            </div>
+
+            <div className="text-[11px] text-muted-foreground bg-muted/30 p-2.5 rounded-xl border">
+              💡 Foto comprimida no aparelho antes de salvar (offline-first). Fica disponível no
+              diário da obra e entra no relatório em PDF para o cliente!
+            </div>
+
+            <DialogFooter className="mt-4 gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setModalFotoLegendaOpen(false)
+                  setFotoPendenteBase64(null)
+                }}
+                disabled={salvandoFoto}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleConfirmarFotoComLegenda}
+                disabled={salvandoFoto || !fotoPendenteBase64}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+              >
+                {salvandoFoto ? 'Salvando...' : 'Salvar no Diário'}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
       {/* Topo do Chat estilo WhatsApp */}
       <div className="shrink-0 p-3 sm:p-3.5 rounded-2xl bg-card border border-border shadow-xs mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
@@ -787,6 +912,21 @@ export const Falar: React.FC = () => {
           onSubmit={handleSendText}
           className="flex items-end gap-2 p-1.5 sm:p-2 rounded-2xl bg-card border border-border shadow-sm"
         >
+          {/* Botão de Foto (Câmera / Galeria com compressão local) */}
+          <label
+            title="Tirar ou escolher foto da obra com legenda"
+            className="w-11 h-11 shrink-0 rounded-xl bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80 flex items-center justify-center transition-all cursor-pointer"
+          >
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handleSelecionarFoto}
+            />
+            <Camera className="w-5 h-5 text-emerald-600" />
+          </label>
+
           {/* Botão de gravação/ditado por voz */}
           {isSupported && (
             <button

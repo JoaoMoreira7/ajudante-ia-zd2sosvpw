@@ -12,6 +12,8 @@ import { parseLocalIntent, ParsedIntent } from '@/lib/intentParser'
 import * as MathEngine from '@/lib/mathEngine'
 import { localDB } from '@/lib/localDB'
 import { mutateEntity } from '@/lib/syncService'
+import { gerarEImprimirRelatorioObraPDF } from '@/lib/obraPdfGenerator'
+import { verificarPermissaoDocumentosPdf } from '@/lib/planLimits'
 import pb from '@/lib/pocketbase/client'
 import { useAuth } from '@/contexts/AuthContext'
 import { ReversibleAction } from '@/types/database'
@@ -115,6 +117,7 @@ export interface VoiceContextType {
   currentPendingConfirm: ChatInteraction | null
   ultimoRecibo: ReciboItem | null
   processUserInput: (input: string, audioDurationSeconds?: number) => Promise<void>
+  anexarFotoComLegenda: (fotoBase64: string, legenda: string, termoObra?: string) => Promise<void>
   confirmCurrentAction: () => Promise<void>
   rejectCurrentAction: () => void
   clearContext: () => void
@@ -2453,6 +2456,97 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             acabando.map((m) => `• ${m.nome}: resta apenas ${m.quantidade} ${m.unidade}`).join('\n')
         }
         tipoBadge = 'EXATO'
+      } else if (parsed.intent === 'gerar_relatorio_obra_pdf') {
+        const termo = (parsed.params.termoObra || '').toLowerCase().trim()
+        const todasObras = await localDB.getAll('obras')
+        let obraEncontrada = todasObras.find(
+          (o) =>
+            o.titulo.toLowerCase().includes(termo) ||
+            (o.endereco && o.endereco.toLowerCase().includes(termo)),
+        )
+
+        // Se não achou por termo, pega a primeira obra ativa ou primeira cadastrada
+        if (!obraEncontrada && todasObras.length > 0) {
+          obraEncontrada = todasObras.find((o) => o.status === 'em_andamento') || todasObras[0]
+        }
+
+        if (!obraEncontrada) {
+          respostaTexto =
+            'Não encontrei nenhuma obra cadastrada para gerar o relatório. Cadastre a obra primeiro em Obras!'
+          tipoBadge = 'EXATO'
+          sugestoes = ['Ver Obras', 'Cadastrar Obra']
+        } else {
+          // Checagem de Limite de Plano para PDF:
+          // O plano Profissional (R$ 49,90) e Empresa liberam PDF; no Essencial (R$ 29,90) mostrar amigavelmente
+          const checagemPdf = verificarPermissaoDocumentosPdf(
+            plano,
+            assinatura?.modulos_liberados,
+            isTrial,
+          )
+
+          if (!checagemPdf.permitido) {
+            respostaTexto = `Opa, mestre! A geração de relatórios completos em PDF com fotos e diário é um recurso do Plano Profissional (R$ 49,90/mês). No Plano Essencial você tem todos os cálculos matemáticos liberados! Quer conhecer os planos? Acesse /planos.`
+            tipoBadge = 'EXATO'
+            sugestoes = ['Ver Planos', 'Como foi minha semana?', 'Quem me deve?']
+          } else {
+            // Reúne dados da obra, diário, fotos, cliente e financeiro
+            const todosDiarios = await localDB.getAll('diario_obra')
+            const diariosObra = todosDiarios.filter((d) => d.obra_id === obraEncontrada!.id)
+
+            const todosDocs = await localDB.getAll('documentos')
+            const fotosObra = todosDocs.filter(
+              (doc) => doc.obra_id === obraEncontrada!.id && doc.tipo === 'foto',
+            )
+
+            const clientes = await localDB.getAll('clientes')
+            const cliente = clientes.find((c) => c.id === obraEncontrada!.cliente_id)
+
+            const financs = await localDB.getAll('financeiro')
+            const gastosObra = financs.filter((f) => f.obra_id === obraEncontrada!.id)
+
+            const orcs = await localDB.getAll('orcamentos')
+            const orcamentoVinculado = orcs.find((o) => o.obra_id === obraEncontrada!.id)
+
+            // Gera e abre o PDF formatado (respeitando se é Dono ou Operador)
+            await gerarEImprimirRelatorioObraPDF({
+              obra: obraEncontrada,
+              clienteNome: cliente?.nome,
+              clienteTelefone: cliente?.whatsapp || cliente?.telefone,
+              diarios: diariosObra,
+              fotos: fotosObra,
+              gastos: isOperador ? [] : gastosObra,
+              orcamento: isOperador ? null : orcamentoVinculado,
+              empresaNome: config?.nome_empresa || undefined,
+              responsavelNome: config?.nome_profissional || profile?.name || 'Mestre de Obras',
+              telefoneContato: config?.telefone || undefined,
+              isDono: !isOperador,
+            })
+
+            respostaTexto = `Relatório em PDF da obra "${obraEncontrada.titulo}" gerado com sucesso! Abri a janela com o resumo para você salvar ou compartilhar com o cliente.`
+            tipoBadge = 'TECNICA'
+            sugestoes = ['Enviar Relatório', 'Ver Obras', 'O que está acabando?']
+          }
+        }
+      } else if (parsed.intent === 'foto_obra_legenda') {
+        const termo = (parsed.params.termoObra || '').toLowerCase().trim()
+        const todasObras = await localDB.getAll('obras')
+        let obraEncontrada = todasObras.find(
+          (o) =>
+            o.titulo.toLowerCase().includes(termo) ||
+            (o.endereco && o.endereco.toLowerCase().includes(termo)),
+        )
+        if (!obraEncontrada && todasObras.length > 0) {
+          obraEncontrada = todasObras.find((o) => o.status === 'em_andamento') || todasObras[0]
+        }
+
+        const legenda = parsed.params.legenda || 'Registro fotográfico da obra'
+        const obraNome = obraEncontrada ? obraEncontrada.titulo : 'obra ativa'
+
+        respostaTexto = obraEncontrada
+          ? `Perfeito! Para anexar a foto à obra "${obraNome}" com a legenda "${legenda}", toque no ícone de câmera/anexo ao lado do campo de mensagem.`
+          : `Entendido sobre a foto ("${legenda}"). Cadastre ou selecione a obra em Obras para vincular a foto ao diário.`
+        tipoBadge = 'EXATO'
+        sugestoes = ['Tirar Foto', 'Ver Obras', 'Gerar Relatório']
       } else if (parsed.intent === 'diario_obra') {
         const serv = parsed.params.atividade || parsed.params.servico || 'Atividade de obra'
         const qtd = parsed.params.quantidade || 0
@@ -2598,12 +2692,123 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       {
         id: 'conf_cancel_' + Date.now(),
         autor: 'ajudante',
-        texto: 'Operação cancelada.',
+        texto: 'Ação cancelada. Nada foi alterado.',
         timestamp: Date.now(),
       },
     ])
   }
 
+  // Anexa foto com legenda vinculando à obra correta (extraída da frase ou obra padrão)
+  const anexarFotoComLegenda = async (fotoBase64: string, legenda: string, termoObra?: string) => {
+    setIsProcessing(true)
+    setStatusText('Salvando foto...')
+    try {
+      const todasObras = await localDB.getAll('obras')
+      let obraAlvo = todasObras.find(
+        (o) =>
+          termoObra &&
+          (o.titulo.toLowerCase().includes(termoObra.toLowerCase()) ||
+            (o.endereco && o.endereco.toLowerCase().includes(termoObra.toLowerCase()))),
+      )
+      if (!obraAlvo && todasObras.length > 0) {
+        obraAlvo = todasObras.find((o) => o.status === 'em_andamento') || todasObras[0]
+      }
+
+      const autorNome = profile?.name || config?.nome_profissional || 'Operador'
+      const autorId = profile?.id || pb.authStore.model?.id || 'local_user'
+
+      const novaFotoId = 'doc_foto_' + Date.now()
+      const dataHojeStr = new Date().toLocaleDateString('pt-BR')
+      const horaStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+      const fotoDoc = {
+        id: novaFotoId,
+        owner_id: obraAlvo?.owner_id || pb.authStore.model?.id || 'local_user',
+        obra_id: obraAlvo?.id,
+        cliente_id: obraAlvo?.cliente_id,
+        tipo: 'foto' as const,
+        arquivo: fotoBase64,
+        descricao: legenda.trim() || 'Foto da obra',
+        data_foto: `${dataHojeStr} às ${horaStr}`,
+        criado_por_nome: autorNome,
+        criado_por_id: autorId,
+        created: new Date().toISOString(),
+      }
+
+      await mutateEntity('documentos', 'create', fotoDoc)
+
+      // Também inclui um registro breve no diário da obra com a foto
+      if (obraAlvo) {
+        const novoDiaId = 'dia_' + Date.now()
+        await mutateEntity('diario_obra', 'create', {
+          id: novoDiaId,
+          owner_id: obraAlvo.owner_id || pb.authStore.model?.id || 'local_user',
+          obra_id: obraAlvo.id,
+          data: new Date().toISOString().split('T')[0],
+          servico: `[Foto] ${legenda.trim() || 'Registro fotográfico da obra'}`,
+          observacoes: `Foto registrada no diário por ${autorNome}`,
+          criado_por_nome: autorNome,
+          criado_por_id: autorId,
+        })
+      }
+
+      const rec: ReciboItem = {
+        id: 'rec_' + Date.now(),
+        tipo: 'foto',
+        entidade: 'documentos',
+        entidadeId: novaFotoId,
+        titulo: 'Foto Registrada no Diário',
+        descricao: legenda.trim() || 'Foto da obra',
+        obraNome: obraAlvo?.titulo,
+        data: dataHojeStr,
+        status: 'Gravado com sucesso',
+        timestamp: Date.now(),
+      }
+      setUltimoRecibo(rec)
+
+      pushUndo({
+        id: 'undo_' + Date.now(),
+        descricao: `Foto "${legenda}" da obra ${obraAlvo?.titulo || ''}`,
+        timestamp: Date.now(),
+        desfazer: async () => {
+          await mutateEntity('documentos', 'delete', { id: novaFotoId })
+        },
+      })
+
+      const msgResposta: ChatInteraction = {
+        id: 'resp_foto_' + Date.now(),
+        autor: 'ajudante',
+        texto: obraAlvo
+          ? `Foto registrada com sucesso no diário da obra "${obraAlvo.titulo}" com a legenda: "${legenda}". Registrado por ${autorNome}.`
+          : `Foto salva no diário com a legenda: "${legenda}". Registrado por ${autorNome}.`,
+        tipoCalculo: 'EXATO',
+        timestamp: Date.now(),
+        recibo: rec,
+        detalhes: {
+          sugestoes: [
+            obraAlvo ? `Gera relatório da obra ${obraAlvo.titulo}` : 'Ver Obras',
+            'Desfaz',
+            'Tirar outra foto',
+          ],
+        },
+      }
+
+      setInteractions((prev) => [...prev, msgResposta])
+    } catch {
+      setInteractions((prev) => [
+        ...prev,
+        {
+          id: 'err_foto_' + Date.now(),
+          autor: 'ajudante',
+          texto: 'Não foi possível salvar a foto no diário da obra. Tente novamente.',
+          timestamp: Date.now(),
+        },
+      ])
+    } finally {
+      setIsProcessing(false)
+      setStatusText('Pronto')
+    }
+  }
   return (
     <VoiceContext.Provider
       value={{
@@ -2614,6 +2819,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         currentPendingConfirm,
         ultimoRecibo,
         processUserInput,
+        anexarFotoComLegenda,
         confirmCurrentAction,
         rejectCurrentAction,
         clearContext,

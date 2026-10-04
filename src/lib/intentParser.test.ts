@@ -62,6 +62,15 @@ describe('Interpretador Local de Intenções (Português do Brasil)', () => {
     const resAcabando = parseLocalIntent('O que está acabando?')
     expect(resAcabando.intent).toBe('estoque_consultar_acabando')
 
+    const resPdf = parseLocalIntent('gera o relatório da obra do João em pdf')
+    expect(resPdf.intent).toBe('gerar_relatorio_obra_pdf')
+    expect(resPdf.params.termoObra).toContain('João')
+
+    const resFoto = parseLocalIntent('essa foto é do vazamento na obra do João')
+    expect(resFoto.intent).toBe('foto_obra_legenda')
+    expect(resFoto.params.termoObra).toContain('João')
+    expect(resFoto.params.legenda).toContain('vazamento')
+
     const resLista = parseLocalIntent('Faz uma lista de compras')
     expect(resLista.intent).toBe('estoque_lista_compras')
   })

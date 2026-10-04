@@ -271,6 +271,7 @@ export interface SyncQueueItem {
     | 'configuracoes'
     | 'tarefas_obra'
     | 'lembretes_obra'
+    | 'equipe_membros'
   entidade_id: string
   operacao: 'create' | 'update' | 'delete'
   payload: Record<string, unknown>
@@ -382,4 +383,18 @@ export interface CatalogoPlano {
   limites: LimitesPlano
   recursos: string[]
   destaque?: boolean
+}
+
+export interface EquipeMembro {
+  id: string
+  owner_id: string
+  operador_user_id?: string
+  nome: string
+  email?: string
+  telefone?: string
+  cargo?: 'operador' | 'encarregado' | 'pedreiro' | 'ajudante'
+  status?: 'ativo' | 'convidado' | 'inativo'
+  obras_permitidas?: string[]
+  created?: string
+  updated?: string
 }

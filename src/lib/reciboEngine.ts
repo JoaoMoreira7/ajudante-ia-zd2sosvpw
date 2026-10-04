@@ -18,11 +18,18 @@ export type TipoRecibo =
   | 'pagamento'
   | 'recebimento'
   | 'parcelamento'
+  | 'foto'
 
 export interface ReciboItem {
   id: string
   tipo: TipoRecibo
-  entidade: 'materiais_estoque' | 'financeiro' | 'diario_obra' | 'obras' | 'configuracoes'
+  entidade:
+    | 'materiais_estoque'
+    | 'financeiro'
+    | 'diario_obra'
+    | 'obras'
+    | 'configuracoes'
+    | 'documentos'
   entidadeId: string
   titulo: string
   descricao: string

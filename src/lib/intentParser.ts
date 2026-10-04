@@ -462,6 +462,65 @@ export function parseLocalIntent(text: string, context?: Record<string, any>): P
     }
   }
 
+  // 14.1 RELATÓRIO PDF DA OBRA ("me manda o resumo da obra do João", "gera o relatório da obra X", "pdf da obra")
+  if (
+    /\b(relat[óo]rio|resumo|pdf)\b/i.test(clean) &&
+    /\b(obra|projeto|servi[çc]o|cliente)\b/i.test(clean) &&
+    /\b(gera|gerar|manda|mandar|envia|enviar|tira|tirar|baixa|baixar|ver|exporta|exportar|imprime|imprimir|faz|fazer)\b/i.test(
+      clean,
+    )
+  ) {
+    const obraMatch = clean.match(
+      /(?:da|de|do|na|no|sobre\s+a)?\s*obra\s+(?:do|da|de)?\s*([a-zá-ú\s0-9]+?)(?:\s+em\s+pdf|\s+no\s+whatsapp|\s+pra\s+mim|\s+para\s+o\s+cliente|\?|$)/i,
+    )
+    const termoObra = obraMatch ? obraMatch[1].replace(/^(do|da|de)\s+/, '').trim() : ''
+
+    return {
+      intent: 'gerar_relatorio_obra_pdf',
+      confidence: 0.95,
+      params: {
+        termoObra,
+        formato: 'pdf',
+      },
+      rawText: text,
+      categoriaAcao: 'obra',
+      respostaSugerida: termoObra
+        ? `Vou gerar o relatório completo da obra ${termoObra} em PDF para você.`
+        : 'Vou gerar o relatório da obra em PDF para você.',
+    }
+  }
+
+  // 14.2 FOTO COM LEGENDA NA OBRA ("essa foto é do vazamento na obra do João", "foto do reboco na obra Central")
+  if (
+    /\b(essa\s+foto|[eé]\s+foto|foto\s+d[eao]|foto\s+do|foto\s+da|foto\s+no|tirou\s+foto|anexa\s+foto|guarda\s+essa\s+foto)\b/i.test(
+      clean,
+    )
+  ) {
+    const obraMatch = clean.match(
+      /(?:na|da|de|da\s+obra|na\s+obra)\s+(?:obra\s+)?(?:do|da|de)?\s*([a-zá-ú0-9\s]+?)(?:\s+ontem|\s+hoje|\s+pra|\s+para|\?|$)/i,
+    )
+    const termoObra = obraMatch ? obraMatch[1].replace(/^(obra|do|da|de)\s+/, '').trim() : ''
+
+    // Extrai legenda removendo menções a "essa foto é...", "guarda essa foto"
+    let legenda = text
+      .replace(/^(essa\s+foto\s+[eé]|foto\s+d[eao]|foto|guarda\s+essa\s+foto)\s*/i, '')
+      .trim()
+    if (!legenda) legenda = text
+
+    return {
+      intent: 'foto_obra_legenda',
+      confidence: 0.95,
+      params: {
+        termoObra,
+        legenda,
+        textoCompleto: text,
+      },
+      rawText: text,
+      categoriaAcao: 'obra',
+      respostaSugerida: `Entendido! Foto vinculada com a legenda "${legenda}".`,
+    }
+  }
+
   // 15. DIÁRIO DE OBRA: CONSULTA E REGISTRO
   // Regras de classificação de atividade em jargões de obra:
   // - "bater o nível com a mangueira" (e variantes) -> atividade "Nivelamento Hidráulico"

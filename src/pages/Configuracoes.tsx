@@ -273,6 +273,24 @@ export const Configuracoes: React.FC = () => {
             </p>
           </button>
         </CardContent>
+
+        {/* Atalho para Gestão de Equipe (Plano Empresa) */}
+        <div className="px-6 pb-5 pt-1 border-t flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <span className="text-xs font-bold text-foreground block">
+              Equipes e Múltiplos Operadores (Plano Empresa)
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Cadastre encarregados para lançarem diário e fotos na mesma conta.
+            </span>
+          </div>
+          <Link to="/equipe">
+            <Button variant="outline" size="sm" className="font-bold text-xs gap-1.5 shrink-0">
+              <Users className="w-4 h-4 text-primary" />
+              Gerenciar Equipe
+            </Button>
+          </Link>
+        </div>
       </Card>
 
       {/* 1. Escolha do Modo de Operação */}

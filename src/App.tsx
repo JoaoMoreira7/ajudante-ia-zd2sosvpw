@@ -22,6 +22,7 @@ import Materiais from '@/pages/Materiais'
 import Ferramentas from '@/pages/Ferramentas'
 import Configuracoes from '@/pages/Configuracoes'
 import Planos from '@/pages/Planos'
+import Equipe from '@/pages/Equipe'
 import Login from '@/pages/Login'
 import Cadastro from '@/pages/Cadastro'
 import Admin from '@/pages/Admin'
@@ -112,6 +113,7 @@ export default function App() {
                     <Route path="ferramentas" element={<Ferramentas />} />
                     <Route path="configuracoes" element={<Configuracoes />} />
                     <Route path="planos" element={<Planos />} />
+                    <Route path="equipe" element={<Equipe />} />
                     <Route path="admin" element={<Admin />} />
                     <Route path="login" element={<Login />} />
                     <Route path="cadastro" element={<Cadastro />} />

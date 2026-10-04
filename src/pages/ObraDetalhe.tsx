@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom'
 import { localDB } from '@/lib/localDB'
 import { Obra, DiarioObra, Orcamento, DocumentoObra } from '@/types/database'
 import { mutateEntity } from '@/lib/syncService'
+import { comprimirImagemOffline } from '@/lib/imageCompressor'
+import { gerarEImprimirRelatorioObraPDF } from '@/lib/obraPdfGenerator'
 import { useAuth } from '@/contexts/AuthContext'
 import {
   verificarPermissaoDocumentosPdf,
@@ -159,6 +161,9 @@ export const ObraDetalhe: React.FC = () => {
       return
     }
 
+    const autorNome = user?.name || config.nome_profissional || 'Operador'
+    const autorId = user?.id || 'local_user'
+
     const novoDiario: DiarioObra = {
       id: 'dia_' + Date.now(),
       owner_id: obra.owner_id || 'local_user',
@@ -168,6 +173,8 @@ export const ObraDetalhe: React.FC = () => {
       quantidade: parseFloat(quantidade) || undefined,
       material: material.trim() || undefined,
       observacoes: observacoes.trim() || undefined,
+      criado_por_nome: autorNome,
+      criado_por_id: autorId,
       created: new Date().toISOString(),
     }
 
@@ -197,8 +204,8 @@ export const ObraDetalhe: React.FC = () => {
     setObra(atualizada)
   }
 
-  // Captura foto pelo input file (capture="environment" para compatibilidade com celulares antigos)
-  const handleCapturarFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Captura foto pelo input file com compressão local offline (Canvas)
+  const handleCapturarFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -238,13 +245,16 @@ export const ObraDetalhe: React.FC = () => {
       )
     }
 
-    // Leitura do arquivo para Base64 (salva offline em IndexedDB de imediato)
-    const reader = new FileReader()
-    reader.onload = () => {
-      setFotoBase64(reader.result as string)
+    // Compressão local offline antes de salvar ou subir
+    try {
+      const res = await comprimirImagemOffline(file, { maxWidth: 1280, quality: 0.75 })
+      setFotoBase64(res.base64)
       setDialogFotoAberto(true)
+    } catch {
+      alert('Não foi possível processar a foto. Tente novamente.')
+    } finally {
+      e.target.value = ''
     }
-    reader.readAsDataURL(file)
   }
 
   const handleSalvarFoto = async (e: React.FormEvent) => {
@@ -255,6 +265,9 @@ export const ObraDetalhe: React.FC = () => {
     if (fotoEtapaIndex !== '' && obra.etapas && obra.etapas[Number(fotoEtapaIndex)]) {
       etapaNome = obra.etapas[Number(fotoEtapaIndex)].nome
     }
+
+    const autorNome = user?.name || config.nome_profissional || 'Operador'
+    const autorId = user?.id || 'local_user'
 
     const novaFoto: DocumentoObra = {
       id: 'doc_foto_' + Date.now(),
@@ -268,6 +281,8 @@ export const ObraDetalhe: React.FC = () => {
       etapa_nome: etapaNome,
       data_foto: fotoDataHora || new Date().toLocaleString('pt-BR'),
       geolocalizacao: fotoGeo || undefined,
+      criado_por_nome: autorNome,
+      criado_por_id: autorId,
       created: new Date().toISOString(),
     }
 
@@ -350,8 +365,35 @@ export const ObraDetalhe: React.FC = () => {
     window.open(url, '_blank')
   }
 
-  const handleImprimirRelatorio = () => {
-    window.print()
+  const handleImprimirRelatorio = async () => {
+    if (!obra) return
+    const validacao = verificarPermissaoDocumentosPdf(planoAtivo, user?.modulos_liberados, isTrial)
+    if (!validacao.permitido) {
+      setUpgradeTitulo('Relatório PDF da Obra')
+      setUpgradeMensagem(
+        'A geração de relatórios completos em PDF com fotos e diário é liberada no Plano Profissional (R$ 49,90) e Empresa.',
+      )
+      setUpgradeModalOpen(true)
+      return
+    }
+
+    const todosFinancs = await localDB.getAll('financeiro')
+    const gastosObra = todosFinancs.filter((f) => f.obra_id === obra.id)
+    const orcamentoVinculado = orcamentos.length > 0 ? orcamentos[0] : null
+
+    await gerarEImprimirRelatorioObraPDF({
+      obra,
+      clienteNome: clienteObra?.nome,
+      clienteTelefone: clienteObra?.whatsapp || clienteObra?.telefone,
+      diarios,
+      fotos,
+      gastos: isDono ? gastosObra : [],
+      orcamento: isDono ? orcamentoVinculado : null,
+      empresaNome: config.nome_empresa || undefined,
+      responsavelNome: config.nome_profissional || user?.name || 'Mestre de Obras',
+      telefoneContato: config.telefone || undefined,
+      isDono,
+    })
   }
 
   const handleGerarRecibo = async () => {
@@ -646,6 +688,11 @@ export const ObraDetalhe: React.FC = () => {
                       <p className="flex items-center gap-1 text-[10px] truncate text-emerald-600 dark:text-emerald-400">
                         <Navigation className="w-3 h-3 shrink-0" />
                         {f.geolocalizacao}
+                      </p>
+                    )}
+                    {(f as any).criado_por_nome && (
+                      <p className="text-[10px] text-muted-foreground">
+                        👤 {(f as any).criado_por_nome}
                       </p>
                     )}
                   </div>
@@ -962,6 +1009,11 @@ export const ObraDetalhe: React.FC = () => {
                   <span className="font-bold text-foreground text-sm">{d.servico}</span>
                   <span className="text-[11px] text-muted-foreground font-mono">{d.data}</span>
                 </div>
+                {(d as any).criado_por_nome && (
+                  <span className="inline-block text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground font-medium">
+                    Registrado por: {(d as any).criado_por_nome}
+                  </span>
+                )}
                 {d.quantidade && (
                   <p className="text-xs font-semibold text-primary">Produção: {d.quantidade} m²</p>
                 )}

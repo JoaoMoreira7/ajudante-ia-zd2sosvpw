@@ -76,6 +76,9 @@ export async function pullRemoteData(): Promise<void> {
     'diario_obra',
     'documentos',
     'configuracoes',
+    'tarefas_obra',
+    'lembretes_obra',
+    'equipe_membros',
   ]
 
   for (const col of collections) {

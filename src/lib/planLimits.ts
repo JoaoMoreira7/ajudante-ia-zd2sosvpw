@@ -235,6 +235,42 @@ export function verificarPermissaoRelatoriosAvancados(
  * a transcrição e o agente de IA na nuvem. Os cálculos determinísticos,
  * registros manuais e o uso offline NUNCA são bloqueados.
  */
+export function verificarPermissaoEquipes(
+  plano: PlanoTipo,
+  modulosLiberados?: string[],
+  isTrial?: boolean,
+): VerificacaoLimiteResultado {
+  if (isTrial) {
+    return {
+      permitido: true,
+      planoAtual: plano,
+    }
+  }
+
+  if (modulosLiberados?.includes('equipes') || modulosLiberados?.includes('relatorios')) {
+    return {
+      permitido: true,
+      planoAtual: plano,
+    }
+  }
+
+  // Apenas Empresa libera membros de equipe
+  if (plano === 'empresa') {
+    return {
+      permitido: true,
+      planoAtual: plano,
+    }
+  }
+
+  return {
+    permitido: false,
+    planoAtual: plano,
+    planoMinimoRecomendado: 'empresa',
+    mensagemBloqueio:
+      'A gestão de equipes e múltiplos operadores em obras faz parte do Plano Empresa (R$ 79,90/mês). No Plano Essencial e Profissional o acesso é individual.',
+  }
+}
+
 export function verificarLimiteAudioMinutos(
   planoId: PlanoTipo,
   minutosUsadosNoMes: number,
