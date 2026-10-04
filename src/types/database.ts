@@ -143,6 +143,8 @@ export interface FinanceiroLancamento {
   total_parcelas?: number
   grupo_parcelamento_id?: string
   credor_nome?: string // Terceiro a quem se deve (ex: "Zé", "Depósito Alvorada")
+  criado_por_nome?: string
+  criado_por_id?: string
   created?: string
   updated?: string
 }
@@ -158,6 +160,8 @@ export interface TarefaObra {
   status: 'pendente' | 'concluida' | 'cancelada'
   origem_fala?: string
   concluida_em?: string
+  criado_por_nome?: string
+  criado_por_id?: string
   created?: string
   updated?: string
 }
@@ -192,6 +196,8 @@ export interface MaterialEstoque {
   preco?: number
   fornecedor?: string
   estoque_minimo?: number
+  criado_por_nome?: string
+  criado_por_id?: string
   created?: string
   updated?: string
 }
@@ -205,6 +211,8 @@ export interface DiarioObra {
   quantidade?: number
   material?: string
   observacoes?: string
+  criado_por_nome?: string
+  criado_por_id?: string
   created?: string
   updated?: string
 }
@@ -229,6 +237,8 @@ export interface DocumentoObra {
   etapa_nome?: string
   data_foto?: string
   geolocalizacao?: string
+  criado_por_nome?: string
+  criado_por_id?: string
   created?: string
   updated?: string
 }

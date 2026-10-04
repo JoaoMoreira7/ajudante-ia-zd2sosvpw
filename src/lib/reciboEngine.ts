@@ -42,6 +42,7 @@ export interface ReciboItem {
   data: string
   status: string
   timestamp: number // timestamp de criação para checagem da janela de 24h
+  criadoPorNome?: string
   alteracaoAnterior?: {
     campo: string
     valorAntes: string | number

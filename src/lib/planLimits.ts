@@ -237,7 +237,7 @@ export function verificarPermissaoRelatoriosAvancados(
  */
 export function verificarPermissaoEquipes(
   plano: PlanoTipo,
-  modulosLiberados?: string[],
+  modulosLiberados?: Record<string, boolean> | string[],
   isTrial?: boolean,
 ): VerificacaoLimiteResultado {
   if (isTrial) {
@@ -247,10 +247,24 @@ export function verificarPermissaoEquipes(
     }
   }
 
-  if (modulosLiberados?.includes('equipes') || modulosLiberados?.includes('relatorios')) {
-    return {
-      permitido: true,
-      planoAtual: plano,
+  // Suporta tanto array quanto Record<string, boolean> (padrão de users.modulos_liberados)
+  if (Array.isArray(modulosLiberados)) {
+    if (modulosLiberados.includes('equipes') || modulosLiberados.includes('relatorios')) {
+      return {
+        permitido: true,
+        planoAtual: plano,
+      }
+    }
+  } else if (modulosLiberados) {
+    if (
+      modulosLiberados['equipes'] ||
+      modulosLiberados['equipe'] ||
+      modulosLiberados['relatorios']
+    ) {
+      return {
+        permitido: true,
+        planoAtual: plano,
+      }
     }
   }
 

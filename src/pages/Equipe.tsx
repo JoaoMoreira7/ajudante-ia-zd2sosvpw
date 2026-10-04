@@ -7,10 +7,13 @@ import {
   EyeOff,
   Building2,
   Trash2,
-  CheckCircle2,
-  AlertCircle,
   Sparkles,
   ArrowRight,
+  Edit3,
+  Mail,
+  Phone,
+  RefreshCw,
+  Share2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -25,7 +28,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { localDB } from '@/lib/localDB'
-import { mutateEntity } from '@/lib/syncService'
+import { mutateEntity, pullRemoteData } from '@/lib/syncService'
 import { useAuth } from '@/contexts/AuthContext'
 import { verificarPermissaoEquipes } from '@/lib/planLimits'
 import { PlanUpgradeModal } from '@/components/PlanUpgradeModal'
@@ -37,20 +40,26 @@ export function EquipePage() {
   const [membros, setMembros] = useState<EquipeMembro[]>([])
   const [obras, setObras] = useState<Obra[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isSyncing, setIsSyncing] = useState(false)
 
   // Modais
-  const [modalNovoMembroOpen, setModalNovoMembroOpen] = useState(false)
+  const [modalFormOpen, setModalFormOpen] = useState(false)
   const [modalUpgradeOpen, setModalUpgradeOpen] = useState(false)
 
-  // Formulário de novo membro
+  // Estado para Edição vs Criação
+  const [membroEditandoId, setMembroEditandoId] = useState<string | null>(null)
+
+  // Formulário de membro
   const [nome, setNome] = useState('')
   const [email, setEmail] = useState('')
   const [telefone, setTelefone] = useState('')
   const [cargo, setCargo] = useState<'operador' | 'encarregado' | 'pedreiro' | 'ajudante'>(
     'operador',
   )
+  const [statusMembro, setStatusMembro] = useState<'ativo' | 'convidado' | 'inativo'>('ativo')
   const [obrasSelecionadas, setObrasSelecionadas] = useState<string[]>([])
   const [salvando, setSalvando] = useState(false)
+  const [feedbackMensagem, setFeedbackMensagem] = useState<string | null>(null)
 
   const permissao = verificarPermissaoEquipes(plano, user?.modulos_liberados, isTrial)
   const isLiberado = permissao.permitido
@@ -58,10 +67,22 @@ export function EquipePage() {
   const carregarDados = async () => {
     setIsLoading(true)
     try {
+      // 1. Tenta carregar do cache local offline-first
       const todosMembros = await localDB.getAll('equipe_membros')
       const todasObras = await localDB.getAll('obras')
       setMembros(todosMembros)
       setObras(todasObras)
+
+      // 2. Se online e autenticado, sincroniza com PocketBase
+      if (navigator.onLine && pb.authStore.isValid) {
+        try {
+          await pullRemoteData()
+          const atualizados = await localDB.getAll('equipe_membros')
+          setMembros(atualizados)
+        } catch {
+          // Mantém dados do IndexedDB se a rede falhar
+        }
+      }
     } finally {
       setIsLoading(false)
     }
@@ -76,12 +97,31 @@ export function EquipePage() {
       setModalUpgradeOpen(true)
       return
     }
+    setMembroEditandoId(null)
     setNome('')
     setEmail('')
     setTelefone('')
     setCargo('operador')
+    setStatusMembro('ativo')
     setObrasSelecionadas([])
-    setModalNovoMembroOpen(true)
+    setFeedbackMensagem(null)
+    setModalFormOpen(true)
+  }
+
+  const handleAbrirEditarMembro = (m: EquipeMembro) => {
+    if (!isLiberado) {
+      setModalUpgradeOpen(true)
+      return
+    }
+    setMembroEditandoId(m.id)
+    setNome(m.nome || '')
+    setEmail(m.email || '')
+    setTelefone(m.telefone || '')
+    setCargo(m.cargo || 'operador')
+    setStatusMembro(m.status || 'ativo')
+    setObrasSelecionadas(m.obras_permitidas || [])
+    setFeedbackMensagem(null)
+    setModalFormOpen(true)
   }
 
   const handleToggleObra = (obraId: string) => {
@@ -95,32 +135,112 @@ export function EquipePage() {
     if (!nome.trim()) return
 
     setSalvando(true)
+    setFeedbackMensagem(null)
     try {
-      const novoMembro: EquipeMembro = {
-        id: 'eq_' + Date.now(),
-        owner_id: user?.id || pb.authStore.model?.id || 'local_user',
-        nome: nome.trim(),
-        email: email.trim() || undefined,
-        telefone: telefone.trim() || undefined,
-        cargo,
-        status: 'ativo',
-        obras_permitidas: obrasSelecionadas,
-        created: new Date().toISOString(),
+      const currentOwnerId = user?.id || pb.authStore.model?.id || 'local_user'
+
+      if (membroEditandoId) {
+        // Fluxo de Atualização / Edição
+        const membroExistente = membros.find((m) => m.id === membroEditandoId)
+        const membroAtualizado: EquipeMembro = {
+          ...membroExistente,
+          id: membroEditandoId,
+          owner_id: membroExistente?.owner_id || currentOwnerId,
+          nome: nome.trim(),
+          email: email.trim() || undefined,
+          telefone: telefone.trim() || undefined,
+          cargo,
+          status: statusMembro,
+          obras_permitidas: obrasSelecionadas,
+          updated: new Date().toISOString(),
+        }
+
+        await mutateEntity('equipe_membros', 'update', membroAtualizado)
+        setFeedbackMensagem(`Operador "${nome.trim()}" atualizado com sucesso!`)
+      } else {
+        // Fluxo de Criação / Convidar
+        // Tenta endpoint dedicado de convite no servidor se online para provisionar o operador em users
+        let salvoViaHook = false
+        if (navigator.onLine && pb.authStore.isValid && pb.authStore.token) {
+          try {
+            const resp = await pb.send('/backend/v1/equipe/convidar', {
+              method: 'POST',
+              body: {
+                nome: nome.trim(),
+                email: email.trim() || undefined,
+                telefone: telefone.trim() || undefined,
+                cargo,
+                obras_permitidas: obrasSelecionadas,
+              },
+            })
+            if (resp && resp.membro) {
+              await mutateEntity('equipe_membros', 'create', resp.membro)
+              salvoViaHook = true
+            }
+          } catch {
+            // Em caso de falha de conexão, aplica fallback local-first
+          }
+        }
+
+        if (!salvoViaHook) {
+          const novoMembro: EquipeMembro = {
+            id: 'eq_' + Date.now(),
+            owner_id: currentOwnerId,
+            nome: nome.trim(),
+            email: email.trim() || undefined,
+            telefone: telefone.trim() || undefined,
+            cargo,
+            status: 'ativo',
+            obras_permitidas: obrasSelecionadas,
+            created: new Date().toISOString(),
+          }
+          await mutateEntity('equipe_membros', 'create', novoMembro)
+        }
+
+        setFeedbackMensagem(`Operador "${nome.trim()}" adicionado à equipe com sucesso!`)
       }
 
-      await mutateEntity('equipe_membros', 'create', novoMembro)
-      setModalNovoMembroOpen(false)
+      setModalFormOpen(false)
       await carregarDados()
+    } catch (err: any) {
+      alert(`Não foi possível salvar o membro da equipe: ${err?.message || 'Tente novamente.'}`)
     } finally {
       setSalvando(false)
     }
   }
 
   const handleExcluirMembro = async (id: string, nomeMembro: string) => {
-    const confirmou = window.confirm(`Remover "${nomeMembro}" da sua equipe?`)
+    const confirmou = window.confirm(
+      `Remover "${nomeMembro}" da sua equipe? Ele perderá o acesso às obras.`,
+    )
     if (!confirmou) return
-    await mutateEntity('equipe_membros', 'delete', { id })
-    await carregarDados()
+    try {
+      await mutateEntity('equipe_membros', 'delete', { id })
+      await carregarDados()
+    } catch (err: any) {
+      alert(`Erro ao remover: ${err?.message || 'Tente novamente'}`)
+    }
+  }
+
+  const handleCompartilharWhatsApp = (membro: EquipeMembro) => {
+    const tel = membro.telefone?.replace(/\D/g, '') || ''
+    const msg = encodeURIComponent(
+      `Olá, ${membro.nome}! Você foi adicionado à equipe de obras no Ajudante IA como ${membro.cargo || 'operador'}. Acesse para registrar fotos e diário das obras: ${window.location.origin}`,
+    )
+    const url = tel ? `https://wa.me/55${tel}?text=${msg}` : `https://wa.me/?text=${msg}`
+    window.open(url, '_blank')
+  }
+
+  const handleForcarSincronizacao = async () => {
+    setIsSyncing(true)
+    try {
+      if (navigator.onLine && pb.authStore.isValid) {
+        await pullRemoteData()
+      }
+      await carregarDados()
+    } finally {
+      setIsSyncing(false)
+    }
   }
 
   return (
@@ -131,7 +251,7 @@ export function EquipePage() {
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-black text-foreground tracking-tight flex items-center gap-2">
               <Users className="w-6 h-6 text-primary" />
-              Equipes e Operadores
+              Gestão de Equipes e Operadores
             </h1>
             <Badge
               variant="outline"
@@ -141,19 +261,46 @@ export function EquipePage() {
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground mt-1">
-            Adicione operadores e encarregados à sua conta. Eles lançam diário e materiais por voz,
-            mas nunca veem valores financeiros.
+            Adicione operadores, encarregados e pedreiros para lançarem diário e fotos por voz. Eles
+            nunca visualizam valores financeiros.
           </p>
         </div>
 
-        <Button
-          onClick={handleAbrirNovoMembro}
-          className="font-bold gap-2 bg-primary text-primary-foreground hover:bg-primary/90 h-10 rounded-xl"
-        >
-          <UserPlus className="w-4 h-4" />
-          Adicionar Operador
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleForcarSincronizacao}
+            disabled={isSyncing}
+            className="h-10 text-xs gap-1.5"
+            title="Atualizar dados da equipe"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+            Sincronizar
+          </Button>
+
+          <Button
+            onClick={handleAbrirNovoMembro}
+            className="font-bold gap-2 bg-primary text-primary-foreground hover:bg-primary/90 h-10 rounded-xl"
+          >
+            <UserPlus className="w-4 h-4" />
+            Adicionar Operador
+          </Button>
+        </div>
       </div>
+
+      {feedbackMensagem && (
+        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs text-emerald-800 dark:text-emerald-300 font-semibold flex items-center justify-between">
+          <span>✓ {feedbackMensagem}</span>
+          <button
+            type="button"
+            onClick={() => setFeedbackMensagem(null)}
+            className="text-xs text-muted-foreground hover:text-foreground font-bold ml-2"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Banner se o plano não for Empresa */}
       {!isLiberado && (
@@ -166,7 +313,8 @@ export function EquipePage() {
               </div>
               <p className="text-xs text-muted-foreground max-w-xl">
                 Opa, mestre! Para colocar sua equipe inteira para lançar diário e fotos nas obras
-                sem ver nada do financeiro, conheça o Plano Empresa.
+                sem ver nada do financeiro, conheça o Plano Empresa (R$ 79,90/mês). No Plano
+                Essencial e Profissional o acesso é individual.
               </p>
             </div>
             <Link to="/planos">
@@ -193,7 +341,7 @@ export function EquipePage() {
               Blindagem Financeira Ativa
               <Badge
                 variant="secondary"
-                className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+                className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 font-bold"
               >
                 100% Seguro
               </Badge>
@@ -202,7 +350,7 @@ export function EquipePage() {
               O perfil <strong>Operador / Encarregado</strong> tem acesso para registrar diário de
               obra, fotos com legenda e baixas de materiais pelo WhatsApp do Ajudante IA. Ele{' '}
               <strong>NUNCA</strong> visualiza custos, orçamentos, margens de lucro ou saldo
-              pendente do cliente.
+              pendente do cliente em nenhuma tela ou relatório em PDF.
             </p>
           </div>
         </CardContent>
@@ -214,6 +362,9 @@ export function EquipePage() {
           <h2 className="text-sm font-bold text-foreground uppercase tracking-wide text-muted-foreground">
             Membros da Equipe ({membros.length})
           </h2>
+          <span className="text-[11px] text-muted-foreground">
+            {isLiberado ? 'Até 5 operadores inclusos no Plano Empresa' : 'Acesso restrito'}
+          </span>
         </div>
 
         {isLoading ? (
@@ -251,39 +402,78 @@ export function EquipePage() {
                 .filter((o) => m.obras_permitidas?.includes(o.id))
                 .map((o) => o.titulo)
 
+              const isMembroAtivo = m.status !== 'inativo'
+
               return (
                 <Card
                   key={m.id}
-                  className="border-border shadow-xs hover:border-primary/40 transition-colors"
+                  className={`border-border shadow-xs hover:border-primary/40 transition-colors ${
+                    !isMembroAtivo ? 'opacity-60 bg-muted/20' : ''
+                  }`}
                 >
                   <CardHeader className="p-4 pb-2 flex flex-row items-start justify-between space-y-0">
                     <div className="space-y-1">
-                      <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                        {m.nome}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <CardTitle className="text-base font-bold text-foreground">
+                          {m.nome}
+                        </CardTitle>
                         <Badge variant="outline" className="text-[10px] capitalize">
                           {m.cargo || 'Operador'}
                         </Badge>
-                      </CardTitle>
+                        {m.status && m.status !== 'ativo' && (
+                          <Badge
+                            variant="secondary"
+                            className={`text-[9px] ${
+                              m.status === 'convidado'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                : 'bg-muted text-muted-foreground'
+                            }`}
+                          >
+                            {m.status}
+                          </Badge>
+                        )}
+                      </div>
+
                       {m.telefone && (
-                        <CardDescription className="text-xs text-muted-foreground font-mono">
-                          📱 {m.telefone}
+                        <CardDescription className="text-xs text-muted-foreground font-mono flex items-center gap-1">
+                          <Phone className="w-3 h-3 text-muted-foreground" />
+                          {m.telefone}
                         </CardDescription>
                       )}
                       {m.email && (
-                        <CardDescription className="text-xs text-muted-foreground">
-                          ✉️ {m.email}
+                        <CardDescription className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Mail className="w-3 h-3 text-muted-foreground" />
+                          {m.email}
                         </CardDescription>
                       )}
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleExcluirMembro(m.id, m.nome)}
-                      className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
-                      title="Remover membro"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleCompartilharWhatsApp(m)}
+                        className="text-muted-foreground hover:text-emerald-600 p-1.5 rounded transition-colors"
+                        title="Enviar convite por WhatsApp"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAbrirEditarMembro(m)}
+                        className="text-muted-foreground hover:text-primary p-1.5 rounded transition-colors"
+                        title="Editar operador"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleExcluirMembro(m.id, m.nome)}
+                        className="text-muted-foreground hover:text-destructive p-1.5 rounded transition-colors"
+                        title="Remover membro"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </CardHeader>
 
                   <CardContent className="p-4 pt-2 space-y-3">
@@ -307,8 +497,8 @@ export function EquipePage() {
                     </div>
 
                     <div className="flex items-center gap-2 pt-2 border-t text-[11px] text-muted-foreground">
-                      <EyeOff className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Financeiro oculto (Modo Operador)</span>
+                      <EyeOff className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>Blindagem financeira ativa (valores ocultos)</span>
                     </div>
                   </CardContent>
                 </Card>
@@ -318,19 +508,28 @@ export function EquipePage() {
         )}
       </div>
 
-      {/* DIÁLOGO: NOVO MEMBRO DA EQUIPE */}
-      <Dialog open={modalNovoMembroOpen} onOpenChange={setModalNovoMembroOpen}>
+      {/* DIÁLOGO: NOVO / EDITAR MEMBRO DA EQUIPE */}
+      <Dialog open={modalFormOpen} onOpenChange={setModalFormOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-primary" />
-              Adicionar Operador à Equipe
+              {membroEditandoId ? (
+                <>
+                  <Edit3 className="w-5 h-5 text-primary" />
+                  Editar Membro da Equipe
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-5 h-5 text-primary" />
+                  Convidar Operador para a Equipe
+                </>
+              )}
             </DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleSalvarMembro} className="space-y-3 mt-2">
             <div>
-              <Label>Nome Completo ou Apelido da Obra *</Label>
+              <Label>Nome Completo ou Apelido *</Label>
               <Input
                 required
                 placeholder="Ex: Zé Encarregado, Beto Pedreiro..."
@@ -364,14 +563,29 @@ export function EquipePage() {
               </div>
             </div>
 
-            <div>
-              <Label>E-mail (opcional para login)</Label>
-              <Input
-                type="email"
-                placeholder="operador@exemplo.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label>E-mail (para login)</Label>
+                <Input
+                  type="email"
+                  placeholder="operador@exemplo.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <Label>Status</Label>
+                <select
+                  value={statusMembro}
+                  onChange={(e) => setStatusMembro(e.target.value as any)}
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                >
+                  <option value="ativo">Ativo</option>
+                  <option value="convidado">Convidado</option>
+                  <option value="inativo">Inativo</option>
+                </select>
+              </div>
             </div>
 
             {/* Obras Permitidas */}
@@ -412,7 +626,7 @@ export function EquipePage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setModalNovoMembroOpen(false)}
+                onClick={() => setModalFormOpen(false)}
                 disabled={salvando}
               >
                 Cancelar
@@ -422,7 +636,11 @@ export function EquipePage() {
                 disabled={salvando || !nome.trim()}
                 className="font-bold bg-primary text-primary-foreground"
               >
-                {salvando ? 'Salvando...' : 'Salvar Operador'}
+                {salvando
+                  ? 'Salvando...'
+                  : membroEditandoId
+                    ? 'Salvar Alterações'
+                    : 'Convidar Operador'}
               </Button>
             </DialogFooter>
           </form>

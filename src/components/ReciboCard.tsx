@@ -166,6 +166,14 @@ export const ReciboCard: React.FC<ReciboCardProps> = ({
             {recibo.status || 'Gravado com sucesso'}
           </span>
         </div>
+
+        {/* Autoria visível no card de recibo */}
+        {recibo.criadoPorNome && (
+          <div className="pt-1 text-[11px] text-muted-foreground flex items-center justify-end gap-1">
+            <span>👤 Registrado por:</span>
+            <strong className="text-foreground font-semibold">{recibo.criadoPorNome}</strong>
+          </div>
+        )}
       </div>
 
       {/* Botões EDITAR e DESFAZER valendo 24h */}
