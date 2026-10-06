@@ -48,6 +48,7 @@ import {
   verificarRecorrenciasNaoLancadas,
 } from '@/lib/alertasPadraoEngine'
 import { gerarResumoManha, deveExibirResumoManhaHoje } from '@/lib/resumoManhaEngine'
+import { CobrancaPixItem, formatarValorBrl } from '@/lib/cobrancaPixEngine'
 
 export type CardAcaoTipo = 'material' | 'ocorrencia' | 'financeiro' | 'calculo' | 'aviso'
 
@@ -70,6 +71,7 @@ export interface ChatInteraction {
   timestamp: number
   cardsAcao?: CardAcaoItem[] // Melhoria 2: confirmação visual em cards coloridos compactos
   recibo?: ReciboItem // Novo: Recibo estruturado estilo Meu Assessor (editar / desfazer 24h)
+  cobrancaPix?: CobrancaPixItem // Card de Cobrança Pix Asaas integrado na conversa
   detalhes?: {
     formula?: string
     passos?: string[]
@@ -116,6 +118,7 @@ export interface VoiceContextType {
   statusText: string
   currentPendingConfirm: ChatInteraction | null
   ultimoRecibo: ReciboItem | null
+  ultimaCobrancaPix: CobrancaPixItem | null
   processUserInput: (input: string, audioDurationSeconds?: number) => Promise<void>
   anexarFotoComLegenda: (fotoBase64: string, legenda: string, termoObra?: string) => Promise<void>
   confirmCurrentAction: () => Promise<void>
@@ -124,6 +127,8 @@ export interface VoiceContextType {
   undoLastAction: () => Promise<string>
   desfazerRecibo: (recibo: ReciboItem) => Promise<void>
   solicitarEdicaoRecibo: (recibo: ReciboItem) => void
+  desfazerCobrancaPix: (cobranca: CobrancaPixItem) => Promise<void>
+  solicitarEdicaoCobrancaPix: (cobranca: CobrancaPixItem) => void
   canUndo: boolean
 }
 
@@ -151,6 +156,96 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   React.useEffect(() => {
     salvarChatPersistido(interactions, profile?.id || 'local_user')
   }, [interactions, profile?.id])
+
+  // OUVIR EVENTOS DE ATUALIZAÇÃO DE COBRANÇAS PIX EM TEMPO REAL (Webhook do Asaas)
+  // Notifica o usuário na conversa no tom de mestre de obras ("João pagou os R$ 350 ✔")
+  React.useEffect(() => {
+    let unsubscribe: (() => void) | undefined
+
+    const setupRealtimeCobrancas = async () => {
+      try {
+        unsubscribe = await pb.collection('cobrancas_pix').subscribe('*', async (e) => {
+          if (e.action === 'update' && e.record) {
+            const r = e.record
+            if (r.status === 'RECEIVED' || r.status === 'CONFIRMED') {
+              const cliNome = r.cliente_nome || 'Cliente'
+              const valorFormatado = formatarValorBrl(r.valor)
+              const avisoTexto = `${cliNome} pagou os ${valorFormatado} ✔`
+
+              // Atualiza o estado da última cobrança se for ela
+              setUltimaCobrancaPix((prev) => {
+                if (prev && (prev.id === r.id || prev.asaas_payment_id === r.asaas_payment_id)) {
+                  return {
+                    ...prev,
+                    status: r.status,
+                    pago_em: r.pago_em,
+                  }
+                }
+                return prev
+              })
+
+              // Atualiza na conversa se já houver card dessa cobrança, mudando o status
+              setInteractions((prev) => {
+                // Idempotência: verifica se o aviso desse pagamento já foi adicionado
+                const jaAvisado = prev.some(
+                  (msg) => msg.id === `aviso_pago_${r.id}` || msg.texto.includes(avisoTexto),
+                )
+                if (jaAvisado) return prev
+
+                const atualizadas = prev.map((msg) => {
+                  if (
+                    msg.cobrancaPix &&
+                    (msg.cobrancaPix.id === r.id ||
+                      msg.cobrancaPix.asaas_payment_id === r.asaas_payment_id)
+                  ) {
+                    return {
+                      ...msg,
+                      cobrancaPix: {
+                        ...msg.cobrancaPix,
+                        status: r.status,
+                        pago_em: r.pago_em,
+                      },
+                    }
+                  }
+                  return msg
+                })
+
+                return [
+                  ...atualizadas,
+                  {
+                    id: `aviso_pago_${r.id}`,
+                    autor: 'ajudante',
+                    texto: `Boa notícia, mestre! ${avisoTexto}. Já dei baixa no financeiro e o valor está liberado.`,
+                    timestamp: Date.now(),
+                    tipoCalculo: 'EXATO',
+                    detalhes: {
+                      sugestoes: ['Consultar saldo', 'Quem está me devendo?', 'Quais as tarefas?'],
+                    },
+                  },
+                ]
+              })
+            }
+          }
+        })
+      } catch {
+        /* PocketBase realtime fallback silencioso se offline */
+      }
+    }
+
+    setupRealtimeCobrancas()
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe()
+      } else {
+        try {
+          pb.collection('cobrancas_pix').unsubscribe('*')
+        } catch {
+          /* intentionally ignored */
+        }
+      }
+    }
+  }, [])
 
   // RESUMO DA MANHÃ AUTOMÁTICO NO PRIMEIRO ACESSO DO DIA (Offline-friendly)
   React.useEffect(() => {
@@ -254,6 +349,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [statusText, setStatusText] = useState('Pronto')
   const [currentPendingConfirm, setCurrentPendingConfirm] = useState<ChatInteraction | null>(null)
   const [ultimoRecibo, setUltimoRecibo] = useState<ReciboItem | null>(null)
+  const [ultimaCobrancaPix, setUltimaCobrancaPix] = useState<CobrancaPixItem | null>(null)
 
   // Empilhar ação reversível local por dispositivo
   const pushUndo = useCallback((action: ReversibleAction) => {
@@ -315,6 +411,74 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         timestamp: Date.now(),
         detalhes: {
           sugestoes: ['o valor é 92', 'a quantidade é 40', 'Desfaz'],
+        },
+      },
+    ])
+  }, [])
+
+  // Desfazer cobrança Pix (janela de 24h)
+  const desfazerCobrancaPix = useCallback(
+    async (cobranca: CobrancaPixItem) => {
+      if (!cobranca) return
+      try {
+        if (cobranca.id) {
+          try {
+            await pb.collection('cobrancas_pix').delete(cobranca.id)
+          } catch {
+            /* intentionally ignored */
+          }
+        }
+        if (cobranca.financeiro_id) {
+          try {
+            await mutateEntity('financeiro', 'delete', { id: cobranca.financeiro_id })
+          } catch {
+            /* intentionally ignored */
+          }
+        }
+
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'cobranca_undone_' + Date.now(),
+            autor: 'ajudante',
+            texto: `Cobrança Pix de ${formatarValorBrl(cobranca.valor)} para ${cobranca.cliente_nome} desfeita com sucesso! O lançamento foi removido.`,
+            timestamp: Date.now(),
+          },
+        ])
+
+        if (ultimaCobrancaPix?.id === cobranca.id) {
+          setUltimaCobrancaPix(null)
+        }
+      } catch {
+        setInteractions((prev) => [
+          ...prev,
+          {
+            id: 'cobranca_err_' + Date.now(),
+            autor: 'ajudante',
+            texto: 'Não foi possível desfazer a cobrança Pix. Tente novamente.',
+            timestamp: Date.now(),
+          },
+        ])
+      }
+    },
+    [ultimaCobrancaPix],
+  )
+
+  // Solicitar edição de cobrança Pix por frase
+  const solicitarEdicaoCobrancaPix = useCallback((cobranca: CobrancaPixItem) => {
+    setInteractions((prev) => [
+      ...prev,
+      {
+        id: 'edit_cob_prompt_' + Date.now(),
+        autor: 'ajudante',
+        texto: `Para corrigir a cobrança Pix do ${cobranca.cliente_nome}, você pode dizer diretamente uma nova cobrança com o valor certo. Exemplo: "cobra 400 do ${cobranca.cliente_nome}".`,
+        timestamp: Date.now(),
+        detalhes: {
+          sugestoes: [
+            `cobra 400 do ${cobranca.cliente_nome}`,
+            'Desfaz',
+            'Quais cobranças pendentes?',
+          ],
         },
       },
     ])
@@ -2281,6 +2445,208 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         respostaTexto =
           'Seu perfil de acesso é Operador. O registro de pagamentos e entradas financeiras é restrito ao Dono da obra.'
         tipoBadge = 'EXATO'
+      } else if (parsed.intent === 'consultar_cobrancas_pendentes') {
+        if (isOperador) {
+          respostaTexto =
+            'Seu perfil de acesso é Operador. A visualização e gestão de cobranças Pix é restrita ao Dono.'
+          tipoBadge = 'EXATO'
+          sugestoes = ['Quais as tarefas?', 'Resumo da manhã']
+        } else {
+          try {
+            // Consulta no PocketBase cobrancas_pix
+            let cobrancas: CobrancaPixItem[] = []
+            try {
+              const res = await pb.collection('cobrancas_pix').getList(1, 20, {
+                filter: `status = 'PENDING'`,
+                sort: '-created',
+              })
+              cobrancas = res.items.map((it: any) => ({
+                id: it.id,
+                cliente_nome: it.cliente_nome,
+                valor: it.valor,
+                descricao: it.descricao,
+                status: it.status,
+                pix_copia_e_cola: it.pix_copia_e_cola,
+                pix_qr_code_base64: it.pix_qr_code_base64,
+                invoice_url: it.invoice_url,
+                criado_por_nome: it.criado_por_nome,
+                vencimento: it.vencimento,
+                timestamp:
+                  it.timestamp || (it.created ? new Date(it.created).getTime() : Date.now()),
+                created: it.created,
+              }))
+            } catch (_) {
+              // Se offline ou falha na collection, busca do financeiro local pendente
+              const finList = await localDB.getAll('financeiro')
+              const finPendentes = finList.filter(
+                (f: any) =>
+                  f.tipo === 'entrada' &&
+                  f.status === 'pendente' &&
+                  (f.cobranca_pix_id || f.descricao?.toLowerCase().includes('cobrança')),
+              )
+              cobrancas = finPendentes.map((f: any) => ({
+                id: f.cobranca_pix_id || f.id,
+                cliente_nome: f.cliente_nome || f.descricao || 'Cliente',
+                valor: f.valor,
+                descricao: f.descricao,
+                status: 'PENDING' as const,
+                criado_por_nome: f.criado_por_nome,
+                timestamp: Date.now(),
+              }))
+            }
+
+            if (cobrancas.length === 0) {
+              respostaTexto =
+                'Nenhuma cobrança Pix pendente no momento! Todas estão pagas ou canceladas.'
+            } else {
+              const totalPendente = cobrancas.reduce((acc, c) => acc + (c.valor || 0), 0)
+              const linhas = cobrancas.map(
+                (c) =>
+                  `• ${c.cliente_nome}: ${formatarValorBrl(c.valor)}${c.descricao ? ` (${c.descricao})` : ''}`,
+              )
+              respostaTexto = `Aqui estão as cobranças Pix pendentes (${formatarValorBrl(totalPendente)} no total):\n\n${linhas.join('\n')}\n\nAssim que o cliente pagar no Asaas, eu te aviso aqui na conversa!`
+            }
+          } catch {
+            respostaTexto =
+              'Não consegui consultar as cobranças pendentes agora. Verifique a conexão com a internet.'
+          }
+          tipoBadge = 'EXATO'
+          sugestoes = ['Quem está me devendo?', 'Consultar saldo', 'Cria cobrança de 100 pro João']
+        }
+      } else if (parsed.intent === 'criar_cobranca_pix') {
+        if (isOperador) {
+          respostaTexto =
+            'Seu perfil de acesso é Operador. A criação de cobranças Pix é restrita ao Dono da conta.'
+          tipoBadge = 'EXATO'
+          sugestoes = ['Quais as tarefas?', 'Resumo da manhã']
+        } else if (!navigator.onLine) {
+          respostaTexto =
+            'Para gerar cobranças Pix via Asaas é necessária conexão com a internet (para gerar o QR code e código copia-e-cola em tempo real). Conecte-se e tente novamente.'
+          tipoBadge = 'EXATO'
+          sugestoes = ['Quem está me devendo?', 'Quais as tarefas?']
+        } else {
+          const valCobranca = parsed.params.valor
+          const cliNome = parsed.params.clienteNome
+          const descCobranca = parsed.params.descricao
+
+          setStatusText('Gerando cobrança Pix no Asaas...')
+          try {
+            // Chamada ao backend pb_hook /backend/v1/asaas/criar-cobranca-pix
+            const res = await pb.send('/backend/v1/asaas/criar-cobranca-pix', {
+              method: 'POST',
+              body: {
+                clienteNome: cliNome,
+                valor: valCobranca,
+                descricao: descCobranca || `Cobrança Pix - ${cliNome}`,
+              },
+            })
+
+            if (res && (res.success || res.sucesso) && res.cobranca) {
+              const cob = res.cobranca
+              const cobItem: CobrancaPixItem = {
+                id: cob.id,
+                owner_id: autorId,
+                cliente_id: cob.clienteId || cob.cliente_id,
+                financeiro_id: cob.financeiroId || cob.financeiro_id,
+                asaas_payment_id: cob.asaasPaymentId || cob.asaas_payment_id,
+                asaas_customer_id: cob.asaasCustomerId || cob.asaas_customer_id,
+                cliente_nome: cob.clienteNome || cob.cliente_nome || cliNome,
+                valor: cob.valor || valCobranca,
+                descricao: cob.descricao || descCobranca,
+                status: cob.status || 'PENDING',
+                pix_copia_e_cola: cob.pixCopiaECola || cob.pix_copia_e_cola,
+                pix_qr_code_base64: cob.pixQrCodeBase64 || cob.pix_qr_code_base64,
+                pix_expiracao: cob.pixExpiracao || cob.pix_expiracao,
+                invoice_url: cob.invoiceUrl || cob.invoice_url,
+                criado_por_nome: cob.criadoPorNome || autorNome,
+                vencimento: cob.vencimento,
+                timestamp: Date.now(),
+              }
+
+              setUltimaCobrancaPix(cobItem)
+
+              // Vincula lançamento a receber no Financeiro local se ainda não existir
+              try {
+                const finId = cob.financeiro_id || 'fin_cob_' + Date.now()
+                await mutateEntity('financeiro', 'create', {
+                  id: finId,
+                  owner_id: autorId,
+                  tipo: 'entrada',
+                  categoria: 'pagamento',
+                  descricao: `Cobrança Pix: ${cliNome}${descCobranca ? ` - ${descCobranca}` : ''}`,
+                  valor: valCobranca,
+                  data: new Date().toISOString().split('T')[0],
+                  status: 'pendente',
+                  cobranca_pix_id: cob.id,
+                  cliente_nome: cliNome,
+                  criado_por_nome: autorNome,
+                  criado_por_id: autorId,
+                })
+              } catch {
+                /* intentionally ignored */
+              }
+
+              // Empilha ação reversível local (janela de 24h)
+              pushUndo({
+                id: 'undo_cob_' + Date.now(),
+                descricao: `Cobrança Pix de ${formatarValorBrl(valCobranca)} para ${cliNome}`,
+                timestamp: Date.now(),
+                desfazer: async () => {
+                  await desfazerCobrancaPix(cobItem)
+                },
+              })
+
+              respostaTexto = `Cobrança Pix de ${formatarValorBrl(valCobranca)} para ${cliNome} gerada com sucesso no Asaas! Segue abaixo o QR Code e o código copia-e-cola para enviar ao cliente:`
+              tipoBadge = 'EXATO'
+              sugestoes = ['Copiar Pix', 'Quais cobranças pendentes?', 'Desfaz']
+
+              const assistantMsg: ChatInteraction = {
+                id: 'resp_cob_' + Date.now(),
+                autor: 'ajudante',
+                texto: respostaTexto,
+                tipoCalculo: tipoBadge,
+                timestamp: Date.now(),
+                cobrancaPix: cobItem,
+                detalhes: {
+                  sugestoes,
+                },
+              }
+              setInteractions((prev) => [...prev, assistantMsg])
+              return
+            } else {
+              // Resposta da API indicou erro amigável (ex: chave não configurada)
+              const msgErro =
+                res?.erro ||
+                'Não foi possível gerar a cobrança Pix. Verifique os dados ou tente novamente.'
+              respostaTexto = msgErro
+              tipoBadge = 'EXATO'
+              sugestoes = ['Configurações', 'Tentar novamente']
+            }
+          } catch (err: any) {
+            // Trata erro de HTTP / Backend sem vazar credenciais nem crash
+            const status = err?.status || err?.response?.status
+            const errData = err?.data || err?.response?.data || {}
+            const erroMsg = errData?.error || errData?.erro || err?.message || ''
+
+            if (
+              status === 412 ||
+              status === 503 ||
+              errData?.chaveNaoConfigurada ||
+              erroMsg.toLowerCase().includes('conectar o asaas') ||
+              erroMsg.toLowerCase().includes('asaas_api_key')
+            ) {
+              respostaTexto =
+                'Pra eu criar cobranças Pix, o Dono precisa conectar o Asaas nas Configurações.'
+            } else if (erroMsg) {
+              respostaTexto = `Não consegui criar a cobrança no Asaas: ${erroMsg}`
+            } else {
+              respostaTexto =
+                'Não foi possível se comunicar com o Asaas agora. Verifique a conexão ou as Configurações e tente de novo.'
+            }
+            tipoBadge = 'EXATO'
+            sugestoes = ['Configurações', 'Quem está me devendo?']
+          }
+        }
       } else if (parsed.intent === 'consultar_tarefas') {
         const tarefasList = await localDB.getAll('tarefas_obra')
         const fila = ordenarFilaTarefas(tarefasList)
@@ -3009,6 +3375,9 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         undoLastAction,
         desfazerRecibo,
         solicitarEdicaoRecibo,
+        desfazerCobrancaPix,
+        solicitarEdicaoCobrancaPix,
+        ultimaCobrancaPix,
         canUndo: undoStack.length > 0,
       }}
     >

@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/button'
 import { WalkieTalkieButton } from '@/components/WalkieTalkieButton'
 import { ActionCardList } from '@/components/ActionCardList'
 import { ReciboCard } from '@/components/ReciboCard'
+import { CobrancaPixCard } from '@/components/CobrancaPixCard'
 import { TarefasELembretesModal } from '@/components/TarefasELembretesModal'
 import {
   obterConsumoAudio,
@@ -62,6 +63,8 @@ export const Falar: React.FC = () => {
     undoLastAction,
     desfazerRecibo,
     solicitarEdicaoRecibo,
+    desfazerCobrancaPix,
+    solicitarEdicaoCobrancaPix,
     clearContext,
     canUndo,
     anexarFotoComLegenda,
@@ -763,6 +766,19 @@ export const Falar: React.FC = () => {
                       recibo={msg.recibo}
                       onDesfazer={desfazerRecibo}
                       onEditar={solicitarEdicaoRecibo}
+                      isOperador={isOperador}
+                      isSimpleMode={isModoSimples}
+                    />
+                  </div>
+                )}
+
+                {/* Card de Cobrança Pix Asaas (QR Code, Copia-e-Cola, Editar e Desfazer 24h) */}
+                {msg.cobrancaPix && (
+                  <div className="mt-2">
+                    <CobrancaPixCard
+                      cobranca={msg.cobrancaPix}
+                      onDesfazer={desfazerCobrancaPix}
+                      onEditar={solicitarEdicaoCobrancaPix}
                       isOperador={isOperador}
                       isSimpleMode={isModoSimples}
                     />

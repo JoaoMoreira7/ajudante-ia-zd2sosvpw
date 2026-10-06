@@ -134,30 +134,50 @@ export function parseLocalIntent(text: string, context?: Record<string, any>): P
     }
   }
 
-  // 1.51 COBRANÇA PIX POR VOZ / ASAAS ("cria uma cobrança de 350 pro João", "cobra 350 do João")
+  // 1.50 CONSULTA DE COBRANÇAS PENDENTES ("quais cobranças pendentes?", "cobranças pendentes")
   if (
-    /\b(cria(?:r)?\s+(?:uma\s+)?cobran[çc]a|cobra(?:r)?\b|gera(?:r)?\s+(?:uma\s+)?cobran[çc]a|fazer\s+cobran[çc]a|lan[çc]a(?:r)?\s+cobran[çc]a|manda(?:r)?\s+(?:um\s+)?pix)\b/i.test(
+    /\b(quais\s+(?:as\s+)?cobran[çc]as\s+pendentes|cobran[çc]as\s+pendentes|listar\s+cobran[çc]as|ver\s+cobran[çc]as|quais\s+cobran[çc]as\s+est[ãa]o\s+abertas|tem\s+cobran[çc]a\s+pendente|tem\s+cobran[çc]as\s+pendentes|cobran[çc]as\s+pix\s+pendentes)\b/i.test(
+      clean,
+    )
+  ) {
+    return {
+      intent: 'consultar_cobrancas_pendentes',
+      confidence: 0.98,
+      params: {},
+      rawText: text,
+      categoriaAcao: 'financeiro',
+      requerConfirmacao: false,
+    }
+  }
+
+  // 1.51 COBRANÇA PIX POR VOZ / ASAAS ("cria uma cobrança de 350 pro João", "cobra 350 do João", "faz uma cobrança de 250 pra obra do José")
+  if (
+    /\b(cria(?:r)?\s+(?:uma\s+)?cobran[çc]a|cobra(?:r)?\b|gera(?:r)?\s+(?:uma\s+)?cobran[çc]a|faz(?:er)?\s+(?:uma\s+)?cobran[çc]a|lan[çc]a(?:r)?\s+cobran[çc]a|manda(?:r)?\s+(?:um\s+)?pix)\b/i.test(
       clean,
     ) &&
     /\b(pro|pra|para|do|da|de|ao|à)\b/i.test(clean)
   ) {
     // Extração direta determinística
     const valorEspMatch = clean.match(
-      /(?:cobran[çc]a\s+(?:pix\s+)?de\s+|cobra\s+|cobrar\s+|pix\s+de\s+|de\s+)(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)/i,
+      /(?:cobran[çc]a\s+(?:pix\s+)?de\s+|cobra\s+|cobrar\s+|pix\s+de\s+)(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)/i,
+    )
+    const valorGeralMatch = clean.match(
+      /(?:r\$\s*|de\s+r\$\s*|de\s+)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)\s*(?:reais)?/i,
     )
     let valorCobranca = 0
-    if (valorEspMatch) {
-      const limpo = valorEspMatch[1].replace(/\./g, '').replace(',', '.')
+    const matchNum = valorEspMatch ? valorEspMatch[1] : valorGeralMatch ? valorGeralMatch[1] : ''
+    if (matchNum) {
+      const limpo = matchNum.replace(/\./g, '').replace(',', '.')
       valorCobranca = parseFloat(limpo) || 0
     }
 
     const clienteMatch = clean.match(
-      /(?:para\s+o\s+cliente|pro\s+cliente|pra\s+cliente|para\s+a\s+cliente|pro|pra|para|do\s+cliente|da\s+cliente|do|da|ao|à)\s+([a-zá-ú0-9\s]+?)(?:\s+referente|\s+sobre|\s+pela|\s+pelo|\s+de\s+servi[çc]o|\s+de\s+consultoria|\s+da\s+obra|\s+na\s+obra|$)/i,
+      /(?:para\s+o\s+cliente|pro\s+cliente|pra\s+cliente|para\s+a\s+cliente|pro\s+obra\s+do|pra\s+obra\s+do|pra\s+obra\s+da|para\s+a\s+obra\s+do|para\s+a\s+obra\s+da|pra\s+obra\s+de|para\s+a\s+obra\s+de|pro|pra|para|do\s+cliente|da\s+cliente|do|da|ao|à)\s+([a-zá-ú0-9\s]+?)(?:\s+referente|\s+sobre|\s+pela|\s+pelo|\s+de\s+servi[çc]o|\s+de\s+consultoria|\s+da\s+obra|\s+na\s+obra|$)/i,
     )
     let clienteNome = ''
     if (clienteMatch) {
       const nomeLimpo = clienteMatch[1]
-        .replace(/^(o|a|cliente|sr|sra)\s+/i, '')
+        .replace(/^(o|a|cliente|sr|sra|obra\s+do|obra\s+da|obra\s+de|obra)\s+/i, '')
         .split(/\s+(?:referente|sobre|pela|pelo|da\s+obra|na\s+obra)\b/i)[0]
         .trim()
       if (nomeLimpo.length >= 2) {

@@ -55,29 +55,50 @@ export function interpretCommandLocally(text: string): LocalParsedIntent {
     }
   }
 
-  // 1.11 "Cria uma cobrança de 350 pro João" / "Cobra 350 do João"
+  // 1.10 "Quais cobranças pendentes?" / "Cobranças pendentes"
   if (
-    /\b(cria(?:r)?\s+(?:uma\s+)?cobran[çc]a|cobra(?:r)?\b|gera(?:r)?\s+(?:uma\s+)?cobran[çc]a|fazer\s+cobran[çc]a|lan[çc]a(?:r)?\s+cobran[çc]a|manda(?:r)?\s+(?:um\s+)?pix)\b/i.test(
+    norm.includes('quais cobrancas pendentes') ||
+    norm.includes('quais cobranças pendentes') ||
+    norm.includes('cobrancas pendentes') ||
+    norm.includes('cobranças pendentes') ||
+    norm.includes('tem cobranca pendente') ||
+    norm.includes('tem cobrança pendente')
+  ) {
+    return {
+      intent: 'consultar_cobrancas_pendentes',
+      confidence: 0.98,
+      params: {},
+      descricaoHumana: 'Consultar lista de cobranças Pix pendentes.',
+    }
+  }
+
+  // 1.11 "Cria uma cobrança de 350 pro João" / "Cobra 350 do João" / "faz uma cobrança de 250 pra obra do José"
+  if (
+    /\b(cria(?:r)?\s+(?:uma\s+)?cobran[çc]a|cobra(?:r)?\b|gera(?:r)?\s+(?:uma\s+)?cobran[çc]a|faz(?:er)?\s+(?:uma\s+)?cobran[çc]a|lan[çc]a(?:r)?\s+cobran[çc]a|manda(?:r)?\s+(?:um\s+)?pix)\b/i.test(
       norm,
     ) &&
     /\b(pro|pra|para|do|da|de|ao|à)\b/i.test(norm)
   ) {
     const valorEspMatch = norm.match(
-      /(?:cobran[çc]a\s+(?:pix\s+)?de\s+|cobra\s+|cobrar\s+|pix\s+de\s+|de\s+)(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)/i,
+      /(?:cobran[çc]a\s+(?:pix\s+)?de\s+|cobra\s+|cobrar\s+|pix\s+de\s+)(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)/i,
+    )
+    const valorGeralMatch = norm.match(
+      /(?:r\$\s*|de\s+r\$\s*|de\s+)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)\s*(?:reais)?/i,
     )
     let valorCobranca = 0
-    if (valorEspMatch) {
-      const limpo = valorEspMatch[1].replace(/\./g, '').replace(',', '.')
+    const matchNum = valorEspMatch ? valorEspMatch[1] : valorGeralMatch ? valorGeralMatch[1] : ''
+    if (matchNum) {
+      const limpo = matchNum.replace(/\./g, '').replace(',', '.')
       valorCobranca = parseFloat(limpo) || 0
     }
 
     const clienteMatch = norm.match(
-      /(?:para\s+o\s+cliente|pro\s+cliente|pra\s+cliente|para\s+a\s+cliente|pro|pra|para|do\s+cliente|da\s+cliente|do|da|ao|à)\s+([a-zá-ú0-9\s]+?)(?:\s+referente|\s+sobre|\s+pela|\s+pelo|\s+de\s+servi[çc]o|\s+de\s+consultoria|\s+da\s+obra|\s+na\s+obra|$)/i,
+      /(?:para\s+o\s+cliente|pro\s+cliente|pra\s+cliente|para\s+a\s+cliente|pro\s+obra\s+do|pra\s+obra\s+do|pra\s+obra\s+da|para\s+a\s+obra\s+do|para\s+a\s+obra\s+da|pra\s+obra\s+de|para\s+a\s+obra\s+de|pro|pra|para|do\s+cliente|da\s+cliente|do|da|ao|à)\s+([a-zá-ú0-9\s]+?)(?:\s+referente|\s+sobre|\s+pela|\s+pelo|\s+de\s+servi[çc]o|\s+de\s+consultoria|\s+da\s+obra|\s+na\s+obra|$)/i,
     )
     let clienteNome = ''
     if (clienteMatch) {
       const nomeLimpo = clienteMatch[1]
-        .replace(/^(o|a|cliente|sr|sra)\s+/i, '')
+        .replace(/^(o|a|cliente|sr|sra|obra\s+do|obra\s+da|obra\s+de|obra)\s+/i, '')
         .split(/\s+(?:referente|sobre|pela|pelo|da\s+obra|na\s+obra)\b/i)[0]
         .trim()
       if (nomeLimpo.length >= 2) {

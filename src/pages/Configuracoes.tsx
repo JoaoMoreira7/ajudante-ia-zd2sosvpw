@@ -13,7 +13,12 @@ import {
   Clock,
   Radio,
   Users,
+  QrCode,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
 } from 'lucide-react'
+import { pb } from '@/lib/pocketbase/client'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,6 +39,44 @@ export const Configuracoes: React.FC = () => {
   const [empresa, setEmpresa] = useState((config as any)?.empresa || config?.nome_empresa || '')
   const [salvo, setSalvo] = useState(false)
   const [consumoAudio] = useState(() => obterConsumoAudio(profile?.id))
+
+  // Estado da verificação de status do Asaas
+  const [asaasStatus, setAsaasStatus] = useState<{
+    configurado: boolean
+    modo?: string
+    carregando: boolean
+  }>({
+    configurado: false,
+    carregando: true,
+  })
+
+  React.useEffect(() => {
+    let ativo = true
+    const verificarStatusAsaas = async () => {
+      try {
+        const res = await pb.send('/backend/v1/asaas/status', { method: 'GET' })
+        if (ativo && res) {
+          setAsaasStatus({
+            configurado: Boolean(res.configurado),
+            modo: res.modo || 'sandbox',
+            carregando: false,
+          })
+        }
+      } catch {
+        if (ativo) {
+          setAsaasStatus({
+            configurado: false,
+            modo: 'sandbox',
+            carregando: false,
+          })
+        }
+      }
+    }
+    verificarStatusAsaas()
+    return () => {
+      ativo = false
+    }
+  }, [])
 
   const limites = obterLimitesPlano(planoAtivo)
   const estadoConsumo = calcularEstadoConsumoAudio(
@@ -388,6 +431,91 @@ export const Configuracoes: React.FC = () => {
               onCheckedChange={(checked) => updateConfig({ alto_contraste: checked })}
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* 2.1 Integração de Cobranças Pix por Voz com o Asaas */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <QrCode className="w-5 h-5 text-emerald-600" />
+              Cobrança Pix por Voz (Asaas)
+            </CardTitle>
+            {asaasStatus.carregando ? (
+              <span className="text-xs text-muted-foreground animate-pulse font-medium">
+                Verificando...
+              </span>
+            ) : asaasStatus.configurado ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                Conectado ({asaasStatus.modo === 'producao' ? 'Produção' : 'Sandbox'})
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                Não configurado
+              </span>
+            )}
+          </div>
+          <CardDescription>
+            Gere cobranças Pix e receba avisos automáticos de pagamento na conversa dizendo "cria
+            uma cobrança de 350 pro João".
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {asaasStatus.configurado ? (
+            <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-800 dark:text-emerald-300 space-y-1">
+              <p className="font-bold flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                Pronto para gerar cobranças Pix por voz!
+              </p>
+              <p className="leading-relaxed">
+                Você pode dizer diretamente no chat: <em>
+                  "cria uma cobrança de 350 pro João"
+                </em> ou{' '}
+                <em>"cobra 500 da Maria referente à pintura"</em>. O Ajudante IA gerará o QR Code
+                Pix e o código copia-e-cola em tempo real.
+              </p>
+            </div>
+          ) : (
+            <div className="p-3.5 rounded-xl bg-muted/40 border text-xs text-muted-foreground space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="space-y-1 leading-relaxed">
+                  <span className="font-bold text-foreground block">
+                    Como conectar sua conta do Asaas:
+                  </span>
+                  <p>
+                    1. Crie ou acesse sua conta no Asaas (sandbox ou produção) e gere uma{' '}
+                    <strong>Chave de API</strong> em <em>Configurações &gt; Integrações</em>.
+                  </p>
+                  <p>
+                    2. Adicione a chave no painel de segredos do servidor com o nome{' '}
+                    <code>ASAAS_API_KEY</code>.
+                  </p>
+                  <p>
+                    3. Para modo de produção, adicione opcionalmente o segredo{' '}
+                    <code>ASAAS_MODE=production</code> (o padrão é sandbox).
+                  </p>
+                </div>
+              </div>
+              <div className="pt-2 border-t border-border/40 flex items-center justify-between flex-wrap gap-2">
+                <span className="text-[11px] text-muted-foreground">
+                  Sem a chave, comandos de voz avisarão amigavelmente sem travar o aplicativo.
+                </span>
+                <a
+                  href="https://www.asaas.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline font-bold inline-flex items-center gap-1"
+                >
+                  Ir para Asaas
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
