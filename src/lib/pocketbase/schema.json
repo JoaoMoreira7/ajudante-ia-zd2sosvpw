@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T00:25:12.870Z",
+  "generatedAt": "2026-10-06T01:18:46.275Z",
   "collections": [
     {
       "name": "users",
@@ -524,6 +524,12 @@
         },
         {
           "name": "criado_por_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "asaas_cobranca_id",
           "type": "text",
           "required": false,
           "system": false
@@ -1674,6 +1680,144 @@
       "indexes": [
         "CREATE INDEX idx_equipe_owner ON equipe_membros (owner_id)",
         "CREATE INDEX idx_equipe_operador ON equipe_membros (operador_user_id)"
+      ]
+    },
+    {
+      "name": "cobrancas_pix",
+      "type": "base",
+      "apiRules": {
+        "list": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "view": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "create": "@request.auth.id != ''",
+        "update": "@request.auth.id != '' && owner_id = @request.auth.id",
+        "delete": "@request.auth.id != '' && owner_id = @request.auth.id"
+      },
+      "fields": [
+        {
+          "name": "owner_id",
+          "type": "relation",
+          "required": true,
+          "system": false,
+          "collectionRef": "users"
+        },
+        {
+          "name": "cliente_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "clientes"
+        },
+        {
+          "name": "financeiro_id",
+          "type": "relation",
+          "required": false,
+          "system": false,
+          "collectionRef": "financeiro"
+        },
+        {
+          "name": "cliente_nome",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "valor",
+          "type": "number",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "descricao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "status",
+          "type": "select",
+          "required": true,
+          "system": false,
+          "selectValues": ["PENDING", "RECEIVED", "CONFIRMED", "OVERDUE", "CANCELLED"]
+        },
+        {
+          "name": "asaas_payment_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "asaas_customer_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pix_copia_e_cola",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pix_qr_code_base64",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pix_expiracao",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "invoice_url",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "pago_em",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "webhook_event_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criado_por_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "criado_por_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": [
+        "CREATE INDEX idx_cobrancas_pix_owner ON cobrancas_pix (owner_id)",
+        "CREATE INDEX idx_cobrancas_pix_asaas ON cobrancas_pix (asaas_payment_id)",
+        "CREATE INDEX idx_cobrancas_pix_status ON cobrancas_pix (status)"
       ]
     }
   ]

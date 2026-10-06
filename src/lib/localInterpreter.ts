@@ -55,6 +55,62 @@ export function interpretCommandLocally(text: string): LocalParsedIntent {
     }
   }
 
+  // 1.11 "Cria uma cobrança de 350 pro João" / "Cobra 350 do João"
+  if (
+    /\b(cria(?:r)?\s+(?:uma\s+)?cobran[çc]a|cobra(?:r)?\b|gera(?:r)?\s+(?:uma\s+)?cobran[çc]a|fazer\s+cobran[çc]a|lan[çc]a(?:r)?\s+cobran[çc]a|manda(?:r)?\s+(?:um\s+)?pix)\b/i.test(
+      norm,
+    ) &&
+    /\b(pro|pra|para|do|da|de|ao|à)\b/i.test(norm)
+  ) {
+    const valorEspMatch = norm.match(
+      /(?:cobran[çc]a\s+(?:pix\s+)?de\s+|cobra\s+|cobrar\s+|pix\s+de\s+|de\s+)(?:r\$\s*)?([0-9]{1,3}(?:\.[0-9]{3})*(?:,[0-9]{1,2})?|[0-9]+(?:[.,][0-9]{1,2})?)/i,
+    )
+    let valorCobranca = 0
+    if (valorEspMatch) {
+      const limpo = valorEspMatch[1].replace(/\./g, '').replace(',', '.')
+      valorCobranca = parseFloat(limpo) || 0
+    }
+
+    const clienteMatch = norm.match(
+      /(?:para\s+o\s+cliente|pro\s+cliente|pra\s+cliente|para\s+a\s+cliente|pro|pra|para|do\s+cliente|da\s+cliente|do|da|ao|à)\s+([a-zá-ú0-9\s]+?)(?:\s+referente|\s+sobre|\s+pela|\s+pelo|\s+de\s+servi[çc]o|\s+de\s+consultoria|\s+da\s+obra|\s+na\s+obra|$)/i,
+    )
+    let clienteNome = ''
+    if (clienteMatch) {
+      const nomeLimpo = clienteMatch[1]
+        .replace(/^(o|a|cliente|sr|sra)\s+/i, '')
+        .split(/\s+(?:referente|sobre|pela|pelo|da\s+obra|na\s+obra)\b/i)[0]
+        .trim()
+      if (nomeLimpo.length >= 2) {
+        clienteNome = nomeLimpo
+          .split(' ')
+          .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+          .join(' ')
+      }
+    }
+
+    let desc: string | undefined
+    const descMatch = norm.match(
+      /(?:referente\s+[aà]\s+|referente\s+ao\s+|referente\s+|sobre\s+a\s+|sobre\s+o\s+|sobre\s+|pela\s+|pelo\s+)(.+)$/i,
+    )
+    if (descMatch) {
+      desc = descMatch[1].trim()
+      desc = desc.charAt(0).toUpperCase() + desc.slice(1)
+    }
+
+    if (valorCobranca > 0 && clienteNome) {
+      return {
+        intent: 'criar_cobranca_pix',
+        confidence: 0.98,
+        params: {
+          valor: valorCobranca,
+          clienteNome: clienteNome,
+          descricao: desc,
+        },
+        descricaoHumana: `Criar cobrança Pix de R$ ${valorCobranca.toFixed(2)} para ${clienteNome}.`,
+      }
+    }
+  }
+
   // 1.2 "Como foi minha semana?" / "Resumo da semana"
   if (
     norm.includes('como foi minha semana') ||
