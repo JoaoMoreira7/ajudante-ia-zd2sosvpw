@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { CATALOGO_PLANOS } from '@/lib/commercialEngine'
 import { PlanoTipo } from '@/types/database'
@@ -386,6 +387,19 @@ export const PlanosPage: React.FC = () => {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Rodapé informativo de Termos e Privacidade */}
+      <div className="text-center pt-2 pb-6 text-xs text-muted-foreground">
+        <span>Dúvidas sobre o funcionamento, privacidade e garantias? Consulte nossos </span>
+        <Link to="/termos" className="font-bold text-primary hover:underline">
+          Termos de Uso
+        </Link>
+        <span> e a </span>
+        <Link to="/privacidade" className="font-bold text-primary hover:underline">
+          Política de Privacidade
+        </Link>
+        <span>.</span>
       </div>
     </div>
   )

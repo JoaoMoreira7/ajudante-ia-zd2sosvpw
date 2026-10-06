@@ -276,6 +276,23 @@ export const Cadastro: React.FC = () => {
               </div>
             </div>
 
+            {/* Aceite dos Termos de Uso e Política de Privacidade */}
+            <p className="text-center text-xs text-muted-foreground leading-relaxed px-2 pt-1">
+              Ao criar a conta você concorda com os{' '}
+              <Link to="/termos" target="_blank" className="font-bold text-primary hover:underline">
+                Termos de Uso
+              </Link>{' '}
+              e a{' '}
+              <Link
+                to="/privacidade"
+                target="_blank"
+                className="font-bold text-primary hover:underline"
+              >
+                Política de Privacidade
+              </Link>
+              .
+            </p>
+
             {/* Botão de Envio */}
             <Button
               type="submit"

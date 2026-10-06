@@ -10,11 +10,11 @@ export const DesktopFooter: React.FC = () => {
           quem constrói.
         </div>
         <div className="flex items-center gap-4">
-          <Link to="/configuracoes" className="hover:text-foreground transition-colors">
+          <Link to="/termos" className="hover:text-foreground transition-colors">
             Termos de Uso
           </Link>
           <span>•</span>
-          <Link to="/configuracoes" className="hover:text-foreground transition-colors">
+          <Link to="/privacidade" className="hover:text-foreground transition-colors">
             Privacidade
           </Link>
           <span>•</span>

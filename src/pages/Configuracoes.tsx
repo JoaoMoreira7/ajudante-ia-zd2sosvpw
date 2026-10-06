@@ -423,7 +423,64 @@ export const Configuracoes: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* 4. Sessão do Usuário */}
+      {/* 4. Documentos Legais e Sobre o Sistema */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-bold flex items-center gap-2">
+            <Shield className="w-5 h-5 text-primary" />
+            Transparência, Termos e Privacidade
+          </CardTitle>
+          <CardDescription>
+            Documentos oficiais com regras de uso, proteção de dados pela LGPD e dados do titular.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Link
+              to="/termos"
+              className="p-3.5 rounded-xl border border-border bg-card hover:bg-muted/40 transition-colors flex items-center justify-between group"
+            >
+              <div>
+                <span className="font-bold text-sm text-foreground group-hover:text-primary transition-colors block">
+                  Termos de Uso
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Regras, planos, suporte e responsabilidades
+                </span>
+              </div>
+              <span className="text-primary text-xs font-bold">Ver →</span>
+            </Link>
+
+            <Link
+              to="/privacidade"
+              className="p-3.5 rounded-xl border border-border bg-card hover:bg-muted/40 transition-colors flex items-center justify-between group"
+            >
+              <div>
+                <span className="font-bold text-sm text-foreground group-hover:text-primary transition-colors block">
+                  Política de Privacidade
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Seus direitos pela LGPD e proteção de dados
+                </span>
+              </div>
+              <span className="text-primary text-xs font-bold">Ver →</span>
+            </Link>
+          </div>
+
+          <div className="pt-2 text-[11px] text-muted-foreground leading-relaxed border-t">
+            <strong>Titular do Sistema:</strong> QUEVRON TECNOLOGIA INOVA SIMPLES (I.S.) — CNPJ
+            69.482.315/0001-19 — Águas de Lindoia/SP. E-mail:{' '}
+            <a
+              href="mailto:jaocarloss@gmail.com"
+              className="text-primary hover:underline font-semibold"
+            >
+              jaocarloss@gmail.com
+            </a>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 5. Sessão do Usuário */}
       {user && (
         <Card>
           <CardContent className="p-5 flex items-center justify-between">

@@ -26,6 +26,8 @@ import Equipe from '@/pages/Equipe'
 import Login from '@/pages/Login'
 import Cadastro from '@/pages/Cadastro'
 import RedefinirSenha from '@/pages/RedefinirSenha'
+import Termos from '@/pages/Termos'
+import Privacidade from '@/pages/Privacidade'
 import Admin from '@/pages/Admin'
 import NotFound from '@/pages/NotFound'
 
@@ -119,6 +121,8 @@ export default function App() {
                     <Route path="login" element={<Login />} />
                     <Route path="cadastro" element={<Cadastro />} />
                     <Route path="redefinir-senha" element={<RedefinirSenha />} />
+                    <Route path="termos" element={<Termos />} />
+                    <Route path="privacidade" element={<Privacidade />} />
                     <Route path="*" element={<NotFound />} />{' '}
                   </Route>
                 </Routes>

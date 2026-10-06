@@ -25,6 +25,8 @@ const TITULOS_ROTAS: Record<string, string> = {
   '/admin': 'Painel Administrativo — Ajudante IA',
   '/login': 'Entrar na Conta — Ajudante IA',
   '/cadastro': 'Criar Conta — Ajudante IA',
+  '/termos': 'Termos de Uso — Ajudante IA',
+  '/privacidade': 'Política de Privacidade — Ajudante IA',
 }
 
 export default function Layout() {

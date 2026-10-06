@@ -243,6 +243,17 @@ export const Login: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Links de Termos e Privacidade no rodapé da autenticação */}
+      <div className="text-center text-xs text-muted-foreground flex items-center justify-center gap-3">
+        <Link to="/termos" className="hover:text-primary transition-colors">
+          Termos de Uso
+        </Link>
+        <span>•</span>
+        <Link to="/privacidade" className="hover:text-primary transition-colors">
+          Privacidade
+        </Link>
+      </div>
     </div>
   )
 }
