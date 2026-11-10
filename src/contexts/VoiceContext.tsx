@@ -2636,7 +2636,7 @@ export const VoiceProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               erroMsg.toLowerCase().includes('asaas_api_key')
             ) {
               respostaTexto =
-                'Pra eu criar cobranças Pix, o Dono precisa conectar o Asaas nas Configurações.'
+                'Pra eu criar cobranças Pix, o Dono precisa conectar o Asaas no Painel do Administrador (aba Gateway Online).'
             } else if (erroMsg) {
               respostaTexto = `Não consegui criar a cobrança no Asaas: ${erroMsg}`
             } else {

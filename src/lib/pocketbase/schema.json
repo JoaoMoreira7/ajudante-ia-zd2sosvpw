@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-06T01:18:46.275Z",
+  "generatedAt": "2026-11-10T18:13:02.090Z",
   "collections": [
     {
       "name": "users",
@@ -1819,6 +1819,77 @@
         "CREATE INDEX idx_cobrancas_pix_asaas ON cobrancas_pix (asaas_payment_id)",
         "CREATE INDEX idx_cobrancas_pix_status ON cobrancas_pix (status)"
       ]
+    },
+    {
+      "name": "integracoes_config",
+      "type": "base",
+      "apiRules": {
+        "list": null,
+        "view": null,
+        "create": null,
+        "update": null,
+        "delete": null
+      },
+      "fields": [
+        {
+          "name": "chave",
+          "type": "text",
+          "required": true,
+          "system": false
+        },
+        {
+          "name": "modo",
+          "type": "select",
+          "required": false,
+          "system": false,
+          "selectValues": ["sandbox", "producao"]
+        },
+        {
+          "name": "conectado",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ultima_validacao_em",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "ultima_validacao_ok",
+          "type": "bool",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "atualizado_por_nome",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "atualizado_por_id",
+          "type": "text",
+          "required": false,
+          "system": false
+        },
+        {
+          "name": "created",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate"]
+        },
+        {
+          "name": "updated",
+          "type": "autodate",
+          "required": false,
+          "system": false,
+          "autodateTriggers": ["onCreate", "onUpdate"]
+        }
+      ],
+      "indexes": ["CREATE UNIQUE INDEX idx_integracoes_config_chave ON integracoes_config (chave)"]
     }
   ]
 }

@@ -1,6 +1,8 @@
 // pocketbase/hooks/asaas_cobranca.js
 // Endpoints de integração com a API v3 do Asaas para Cobranças Pix por Voz
 // Regra do Skip Cloud Hooks: variáveis e funções auxiliares inline dentro de cada callback
+// A chave de API é obtida por PONTO ÚNICO: $hooks.obterConfigAsaas($app) (asaas_config.js)
+// — prioridade env ASAAS_API_KEY > chave colada pelo Dono no app (coleção integracoes_config).
 
 // 1. Endpoint para verificar status da integração (chave presente ou ausente)
 routerAdd(
@@ -13,17 +15,28 @@ routerAdd(
         return e.json(401, { error: 'Autenticação necessária' })
       }
 
-      const apiKey = $os.getenv('ASAAS_API_KEY') || ''
-      const mode = ($os.getenv('ASAAS_MODE') || 'sandbox').trim().toLowerCase()
-      const configurado = Boolean(apiKey && apiKey.trim().length > 0)
+      const resolved = $hooks.obterConfigAsaas($app)
+      const configurado = Boolean(resolved.apiKey && resolved.apiKey.trim().length > 0)
+      const mode = resolved.modo || 'sandbox'
+
+      let mensagem
+      if (configurado && resolved.origem === 'app') {
+        mensagem =
+          'Integração Asaas ativa (' +
+          (mode === 'producao' ? 'Produção' : 'Sandbox') +
+          ') e pronta para gerar Pix.'
+      } else if (configurado) {
+        mensagem = 'Integração Asaas ativa e pronta para gerar Pix.'
+      } else {
+        mensagem = 'Chave de API do Asaas ainda não conectada.'
+      }
 
       return e.json(200, {
         configurado: configurado,
         modo: mode === 'production' ? 'producao' : 'sandbox',
         status: configurado ? 'conectado' : 'nao_configurado',
-        mensagem: configurado
-          ? 'Integração Asaas ativa e pronta para gerar Pix.'
-          : 'Chave ASAAS_API_KEY ainda não configurada no servidor.',
+        origem: resolved.origem,
+        mensagem: mensagem,
       })
     } catch (err) {
       return e.json(500, { error: 'Erro ao verificar status do Asaas: ' + err.message })
@@ -51,7 +64,8 @@ routerAdd(
         })
       }
 
-      const apiKey = ($os.getenv('ASAAS_API_KEY') || '').trim()
+      const resolved = $hooks.obterConfigAsaas($app)
+      const apiKey = (resolved.apiKey || '').trim()
       if (!apiKey) {
         return e.json(412, {
           chaveNaoConfigurada: true,
@@ -78,7 +92,7 @@ routerAdd(
         return e.json(400, { error: 'O valor da cobrança Pix deve ser maior que zero.' })
       }
 
-      const mode = ($os.getenv('ASAAS_MODE') || 'sandbox').trim().toLowerCase()
+      const mode = resolved.modo === 'producao' ? 'production' : resolved.modo || 'sandbox'
       const baseUrl =
         mode === 'production' ? 'https://api.asaas.com/v3' : 'https://api-sandbox.asaas.com/v3'
 

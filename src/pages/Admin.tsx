@@ -63,9 +63,26 @@ import DirectSaleModal from '@/components/admin/DirectSaleModal'
 import BlockClientModal from '@/components/admin/BlockClientModal'
 import UnblockClientModal from '@/components/admin/UnblockClientModal'
 import ReleaseModulesModal from '@/components/admin/ReleaseModulesModal'
+import AsaasGatewayConfig from '@/components/admin/AsaasGatewayConfig'
 
 export const AdminPage: React.FC = () => {
   const { user, isAdmin, setPerfil } = useAuth()
+  // Status real do gateway (aba "Gateway Online") — carregado pelo AsaasGatewayConfig;
+  // aqui apenas para o rótulo da aba refletir Conectado/Pendente.
+  const [gatewayConectado, setGatewayConectado] = useState<boolean | null>(null)
+  useEffect(() => {
+    let ativo = true
+    pb.send('/backend/v1/asaas/gateway/status', { method: 'GET' })
+      .then((res: { configurado?: boolean }) => {
+        if (ativo) setGatewayConectado(Boolean(res?.configurado))
+      })
+      .catch(() => {
+        if (ativo) setGatewayConectado(null)
+      })
+    return () => {
+      ativo = false
+    }
+  }, [])
 
   // Estados de dados
   const [faturas, setFaturas] = useState<FaturaVenda[]>([])
@@ -388,7 +405,7 @@ export const AdminPage: React.FC = () => {
           </TabsTrigger>
           <TabsTrigger value="gateway" className="font-bold text-xs gap-1.5">
             <CreditCard className="w-3.5 h-3.5" />
-            Gateway Online (Pendente)
+            {gatewayConectado === true ? 'Gateway Online (Conectado)' : 'Gateway Online (Pendente)'}
           </TabsTrigger>
         </TabsList>
 
@@ -774,53 +791,9 @@ export const AdminPage: React.FC = () => {
           </Card>
         </TabsContent>
 
-        {/* ABA: GATEWAY ONLINE (PENDENTE DE CONFIGURAÇÃO) */}
+        {/* ABA: GATEWAY ONLINE — configuração da chave do Asaas (apenas Dono) */}
         <TabsContent value="gateway" className="space-y-4 mt-4">
-          <Card className="border-border">
-            <CardHeader>
-              <div className="flex items-center gap-2 text-amber-600 mb-1">
-                <AlertTriangle className="w-5 h-5" />
-                <Badge
-                  variant="outline"
-                  className="border-amber-500/40 text-amber-700 dark:text-amber-300 text-[10px]"
-                >
-                  MOCK EXPLICITAMENTE ROTULADO
-                </Badge>
-              </div>
-              <CardTitle className="text-lg font-black text-foreground">
-                Conector de Gateway de Pagamento Online (Asaas / Cartão)
-              </CardTitle>
-              <CardDescription className="text-xs">
-                Camada de abstração pronta para plugar API Key do gateway de pagamentos recorrentes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-950 dark:text-amber-200 space-y-2">
-                <p className="font-bold">Status Atual: PENDENTE DE CONFIGURAÇÃO DE CHAVE</p>
-                <p>
-                  As vendas &quot;Via Internet&quot; só serão ativadas de verdade quando o
-                  proprietário cadastrar o token de produção da conta Asaas ou outro gateway. Todas
-                  as vendas ativas hoje são processadas pelo canal seguro de{' '}
-                  <strong>Venda Direta</strong>.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="p-3 rounded-lg border bg-muted/30">
-                  <span className="text-muted-foreground block text-[11px]">
-                    Provedor Suportado:
-                  </span>
-                  <span className="font-bold text-foreground">Asaas Pagamentos S.A.</span>
-                </div>
-                <div className="p-3 rounded-lg border bg-muted/30">
-                  <span className="text-muted-foreground block text-[11px]">Webhook Endpoint:</span>
-                  <span className="font-mono text-[11px] text-foreground">
-                    /backend/v1/webhooks/asaas (aguardando plug)
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <AsaasGatewayConfig />
         </TabsContent>
       </Tabs>
 
